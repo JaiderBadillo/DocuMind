@@ -366,6 +366,7 @@ class DocuMindApp {
 
       // Update folder dropdown in upload zone if present
       this.populateUploadFolderSelect();
+      this.populateChatScopeSelect();
     } catch (err) {
       console.error('Error cargando repositorios:', err);
     }
@@ -455,6 +456,22 @@ class DocuMindApp {
       if (repo.id === this.currentRepoId) opt.selected = true;
       select.appendChild(opt);
     });
+  }
+
+  populateChatScopeSelect() {
+    const select = document.getElementById('chat-repo-scope');
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="all">🌐 Todos los Repositorios</option>';
+    this.repositories.forEach(repo => {
+      const opt = document.createElement('option');
+      opt.value = repo.id;
+      opt.textContent = `📁 ${repo.name}`;
+      select.appendChild(opt);
+    });
+    if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+      select.value = currentVal;
+    }
   }
 
   // ================= DOCUMENTS & DRAG AND DROP =================
@@ -830,7 +847,10 @@ class DocuMindApp {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
       try {
-        const resp = await api.ragChat(text, this.currentRepoId);
+        const scopeSelect = document.getElementById('chat-repo-scope');
+        const selectedScope = scopeSelect ? scopeSelect.value : 'all';
+        const repoIdToSend = (selectedScope && selectedScope !== 'all') ? parseInt(selectedScope) : null;
+        const resp = await api.ragChat(text, repoIdToSend);
         loadingBubble.remove();
         messagesContainer.appendChild(renderChatMessage({
           sender: 'bot',

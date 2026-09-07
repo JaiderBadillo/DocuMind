@@ -77,11 +77,50 @@ STOPWORDS_ES = {
     "dime", "cuenta", "sabes", "sobre", "acerca", "favor"
 }
 
+def normalize_text_for_search(text: str) -> str:
+    if not text:
+        return ""
+    text = text.lower()
+    accents = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u', 'ñ': 'n'
+    }
+    for orig, repl in accents.items():
+        text = text.replace(orig, repl)
+    return text
+
+SYNONYMS_ES = {
+    "estudiante": ["autor", "autores", "estudiante", "estudiantes", "candidato", "alumno", "desarrollador"],
+    "estudiantes": ["autor", "autores", "estudiante", "estudiantes", "integrantes", "comparecen"],
+    "autor": ["estudiante", "estudiantes", "autor", "autores", "integrantes", "comparecen"],
+    "autores": ["estudiante", "estudiantes", "autor", "autores", "integrantes", "comparecen"],
+    "integrante": ["autor", "autores", "estudiante", "estudiantes", "integran", "equipo"],
+    "integrantes": ["autor", "autores", "estudiante", "estudiantes", "integran", "equipo"],
+    "director": ["docente", "tutor", "profesor", "director", "wilson"],
+    "docente": ["director", "profesor", "docente", "tutor", "castano", "wilson"],
+    "profesor": ["director", "profesor", "docente", "tutor", "castano", "wilson"],
+    "penalidad": ["penal", "penalidad", "multa", "sancion", "incumplimiento", "20%"],
+    "penalidades": ["penal", "penalidad", "multa", "sancion", "incumplimiento", "20%"],
+    "sancion": ["penal", "penalidad", "multa", "sancion", "incumplimiento", "20%"],
+    "valor": ["cuantia", "costo", "precio", "monto", "total", "subtotal", "$", "cop"],
+    "cuantia": ["valor", "monto", "total", "precio", "$", "cop"],
+    "monto": ["cuantia", "valor", "total", "subtotal", "$", "cop"],
+    "contrato": ["acuerdo", "convenio", "prestacion", "arrendamiento", "contratista"],
+    "contratos": ["acuerdo", "convenio", "prestacion", "arrendamiento", "contratista"],
+    "factura": ["comprobante", "iva", "emisor", "cliente", "total a pagar", "subtotal"],
+    "facturas": ["comprobante", "iva", "emisor", "cliente", "total a pagar", "subtotal"]
+}
+
 def extract_informative_terms(text: str) -> List[str]:
-    """Extracts non-stopword, meaningful keywords from user query."""
-    clean = re.sub(r'[^\w\s]', ' ', text.lower())
+    """Extracts non-stopword, meaningful keywords from user query with synonym expansion."""
+    clean = re.sub(r'[^\w\s]', ' ', normalize_text_for_search(text))
     words = clean.split()
-    return [w for w in words if len(w) > 2 and w not in STOPWORDS_ES]
+    base_terms = [w for w in words if len(w) > 2 and w not in STOPWORDS_ES]
+    
+    expanded = set(base_terms)
+    for w in base_terms:
+        if w in SYNONYMS_ES:
+            expanded.update(SYNONYMS_ES[w])
+    return list(expanded)
 
 def search_similar_chunks(
     query: str, 
@@ -91,80 +130,112 @@ def search_similar_chunks(
     top_k: int = 5
 ) -> List[Dict[str, Any]]:
     """
-    Discriminative semantic & keyword retrieval:
-    Gives heavy weight to rare, informative query terms (e.g. 'director', 'penalidad', 'iva')
-    and deduplicates adjacent overlapping chunks.
+    Discriminative semantic & keyword retrieval with accent normalization and full fallback.
     """
     query_vector = compute_sparse_embedding(query)
     info_terms = extract_informative_terms(query)
-    query_clean_lower = query.strip().lower()
+    query_norm = normalize_text_for_search(query.strip())
     
     candidates = []
     
     with get_db() as conn:
-        sql = """
-        SELECT c.id, c.document_id, c.chunk_index, c.chunk_text, c.embedding_json,
-               d.original_filename, d.file_extension, m.category
-        FROM document_chunks c
-        JOIN documents d ON c.document_id = d.id
-        LEFT JOIN document_metadata m ON d.id = m.document_id
-        WHERE d.processing_status = 'COMPLETED'
-        """
-        params = []
-        if repository_id:
-            sql += " AND d.repository_id = ?"
-            params.append(repository_id)
-        if category:
-            sql += " AND m.category = ?"
-            params.append(category)
-        if file_extension:
-            sql += " AND LOWER(d.file_extension) = ?"
-            params.append(file_extension.lower())
-            
-        cursor = conn.cursor()
-        cursor.execute(sql, tuple(params))
-        rows = cursor.fetchall()
-        
-        for row in rows:
-            chunk_text = row["chunk_text"]
-            chunk_lower = chunk_text.lower()
-            
-            # Base cosine similarity
-            sim = 0.0
-            if row["embedding_json"]:
-                chunk_vec = json.loads(row["embedding_json"])
-                sim = cosine_similarity(query_vector, chunk_vec)
+        # First attempt with repository filter if provided
+        for current_repo in [repository_id, None]:
+            sql = """
+            SELECT c.id, c.document_id, c.chunk_index, c.chunk_text, c.embedding_json,
+                   d.original_filename, d.file_extension, m.category
+            FROM document_chunks c
+            JOIN documents d ON c.document_id = d.id
+            LEFT JOIN document_metadata m ON d.id = m.document_id
+            WHERE d.processing_status = 'COMPLETED'
+            """
+            params = []
+            if current_repo:
+                sql += " AND d.repository_id = ?"
+                params.append(current_repo)
+            if category:
+                sql += " AND m.category = ?"
+                params.append(category)
+            if file_extension:
+                sql += " AND LOWER(d.file_extension) = ?"
+                params.append(file_extension.lower())
                 
-            # Score discriminative terms
-            term_score = 0.0
-            matched_terms_count = 0
-            for term in info_terms:
-                if term in chunk_lower:
-                    matched_terms_count += 1
-                    term_score += 1.5
-                    # Extra boost if it appears near beginning of chunk or with colon
-                    if re.search(rf'\b{term}\s*[:\-]', chunk_lower):
-                        term_score += 3.0
+            cursor = conn.cursor()
+            cursor.execute(sql, tuple(params))
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                chunk_text = row["chunk_text"]
+                chunk_norm = normalize_text_for_search(chunk_text)
+                
+                sim = 0.0
+                if row["embedding_json"]:
+                    try:
+                        chunk_vec = json.loads(row["embedding_json"])
+                        sim = cosine_similarity(query_vector, chunk_vec)
+                    except Exception:
+                        pass
+                    
+                term_score = 0.0
+                matched_terms_count = 0
+                for term in info_terms:
+                    norm_t = normalize_text_for_search(term)
+                    if norm_t in chunk_norm:
+                        matched_terms_count += 1
+                        term_score += 2.0
+                        if re.search(rf'\b{norm_t}\s*[:\-]', chunk_norm):
+                            term_score += 3.5
 
-            # Exact multi-term or phrase boost
-            if len(info_terms) >= 2 and all(t in chunk_lower for t in info_terms):
-                term_score += 4.0
-            if query_clean_lower in chunk_lower:
-                term_score += 6.0
+                if len(info_terms) >= 2 and sum(1 for t in info_terms if normalize_text_for_search(t) in chunk_norm) >= 2:
+                    term_score += 4.0
+                if query_norm and query_norm in chunk_norm:
+                    term_score += 7.0
 
-            final_score = (sim * 0.25) + term_score
+                final_score = (sim * 0.3) + term_score
 
-            if final_score > 0.1:
-                candidates.append({
-                    "document_id": row["document_id"],
-                    "document_name": row["original_filename"],
-                    "file_extension": row["file_extension"],
-                    "category": row["category"] or "General",
-                    "chunk_index": row["chunk_index"],
-                    "relevance_score": round(min(0.99, 0.40 + (final_score * 0.12)), 2),
-                    "excerpt": chunk_text,
-                    "matched_count": matched_terms_count
-                })
+                if final_score > 0.05:
+                    candidates.append({
+                        "document_id": row["document_id"],
+                        "document_name": row["original_filename"],
+                        "file_extension": row["file_extension"],
+                        "category": row["category"] or "General",
+                        "chunk_index": row["chunk_index"],
+                        "relevance_score": round(min(0.99, 0.45 + (final_score * 0.1)), 2),
+                        "excerpt": chunk_text,
+                        "matched_count": matched_terms_count
+                    })
+
+            if candidates or current_repo is None:
+                break
+
+    # If still no candidates from chunks, fall back to scanning raw_text from documents table
+    if not candidates:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT d.id, d.original_filename, d.file_extension, d.raw_text, m.category, m.executive_summary
+                FROM documents d
+                LEFT JOIN document_metadata m ON d.id = m.document_id
+                WHERE d.processing_status = 'COMPLETED'
+                ORDER BY d.id DESC LIMIT 10
+            """)
+            raw_docs = cursor.fetchall()
+            for rd in raw_docs:
+                txt = rd["raw_text"] or rd["executive_summary"] or ""
+                txt_norm = normalize_text_for_search(txt)
+                doc_terms_matched = sum(1 for t in info_terms if normalize_text_for_search(t) in txt_norm)
+                if doc_terms_matched > 0 or not info_terms:
+                    # Take first 1200 characters as excerpt
+                    candidates.append({
+                        "document_id": rd["id"],
+                        "document_name": rd["original_filename"],
+                        "file_extension": rd["file_extension"],
+                        "category": rd["category"] or "General",
+                        "chunk_index": 0,
+                        "relevance_score": 0.85,
+                        "excerpt": txt[:1400],
+                        "matched_count": doc_terms_matched
+                    })
 
     # Sort descending by relevance
     candidates.sort(key=lambda x: (x["matched_count"], x["relevance_score"]), reverse=True)
@@ -424,7 +495,7 @@ def answer_rag_query(query: str, repository_id: Optional[int] = None) -> Dict[st
             PREGUNTA:
             {query}
             """
-            answer_text, _ = generate_with_gemini_fallback(genai, prompt)
+            answer_text, used_model = generate_with_gemini_fallback(genai, prompt)
             return {
                 "query": query,
                 "answer": answer_text,
@@ -439,7 +510,7 @@ def answer_rag_query(query: str, repository_id: Optional[int] = None) -> Dict[st
                     }
                     for c in top_chunks
                 ],
-                "model_used": f"Google Gemini ({selected_model}) (RAG)"
+                "model_used": f"Google Gemini ({used_model}) (RAG)"
             }
         except Exception as e:
             print(f"Fallback RAG local: {e}")
