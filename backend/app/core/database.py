@@ -1,7 +1,11 @@
 import sqlite3
+import shutil
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
-from .config import DATABASE_PATH
+from .config import DATABASE_PATH, BASE_DIR
+
+SEED_DB_PATH = BASE_DIR / "documind_seed.db"
 
 _DB_INITIALIZED = False
 
@@ -13,6 +17,17 @@ def get_db_connection():
 
 def init_database():
     global _DB_INITIALIZED
+    
+    target_path = Path(DATABASE_PATH)
+    if not target_path.exists() or target_path.stat().st_size < 10000:
+        if SEED_DB_PATH.exists():
+            try:
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(str(SEED_DB_PATH), str(target_path))
+                print(f"[DB] Initialized database from seed: {SEED_DB_PATH} -> {target_path}")
+            except Exception as e:
+                print(f"[DB] Could not copy seed db: {e}")
+                
     conn = get_db_connection()
     try:
         cursor = conn.cursor()

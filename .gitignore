@@ -21,6 +21,7 @@ backend/documind.db
 backend/documind.db-journal
 *.sqlite3
 *.db
+!backend/documind_seed.db
 
 # Archivos subidos en tiempo de ejecución
 backend/storage/*
