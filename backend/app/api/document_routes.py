@@ -15,7 +15,7 @@ from ..models.schemas import (
     DocumentAiEditRequest, 
     DocumentAiEditResponse
 )
-from ..services.document_parser import parse_document
+from ..services.document_parser import parse_document, text_lines_to_html, get_doc_images_dir
 from ..services.ai_engine import process_document_ai
 from ..services.vector_store import save_document_chunks
 from ..services.document_copilot import assist_document_edit
@@ -30,9 +30,10 @@ def execute_ai_pipeline(doc_id: int, stored_path: Path, ext: str, user_id: int):
         with get_db() as conn:
             conn.execute("UPDATE documents SET processing_status = 'PROCESSING' WHERE id = ?", (doc_id,))
             
-        # 2. Extract text from PDF / DOCX / TXT
-        parse_res = parse_document(stored_path, ext)
+        # 2. Extract text, tables, and images from PDF / DOCX / TXT
+        parse_res = parse_document(stored_path, ext, doc_id=doc_id)
         raw_text = parse_res["raw_text"]
+        content_html = parse_res.get("content_html") or text_lines_to_html(raw_text)
         word_count = parse_res["word_count"]
         
         if not raw_text.strip():
@@ -43,7 +44,10 @@ def execute_ai_pipeline(doc_id: int, stored_path: Path, ext: str, user_id: int):
         
         # 4. Save metadata & chunks to DB
         with get_db() as conn:
-            conn.execute("UPDATE documents SET raw_text = ?, processing_status = 'COMPLETED' WHERE id = ?", (raw_text, doc_id))
+            conn.execute(
+                "UPDATE documents SET raw_text = ?, content_html = ?, processing_status = 'COMPLETED' WHERE id = ?", 
+                (raw_text, content_html, doc_id)
+            )
             
             # Save or replace metadata
             conn.execute("DELETE FROM document_metadata WHERE document_id = ?", (doc_id,))
@@ -202,7 +206,7 @@ def get_document_detail(doc_id: int, current_user: dict = Depends(get_current_us
         if is_admin:
             cursor.execute("""
             SELECT d.id, d.repository_id, d.original_filename, d.file_extension,
-                   d.file_size_bytes, d.mime_type, d.processing_status, d.created_at, d.raw_text,
+                   d.file_size_bytes, d.mime_type, d.processing_status, d.created_at, d.raw_text, d.content_html,
                    m.category, m.category_confidence, m.executive_summary, m.extracted_entities_json,
                    m.token_count, m.word_count, m.processed_at
             FROM documents d
@@ -212,7 +216,7 @@ def get_document_detail(doc_id: int, current_user: dict = Depends(get_current_us
         else:
             cursor.execute("""
             SELECT d.id, d.repository_id, d.original_filename, d.file_extension,
-                   d.file_size_bytes, d.mime_type, d.processing_status, d.created_at, d.raw_text,
+                   d.file_size_bytes, d.mime_type, d.processing_status, d.created_at, d.raw_text, d.content_html,
                    m.category, m.category_confidence, m.executive_summary, m.extracted_entities_json,
                    m.token_count, m.word_count, m.processed_at
             FROM documents d
@@ -242,6 +246,8 @@ def get_document_detail(doc_id: int, current_user: dict = Depends(get_current_us
                 "processed_at": str(r["processed_at"])
             }
             
+        html_content = r["content_html"] if r["content_html"] else text_lines_to_html(r["raw_text"] or "")
+
         return {
             "id": r["id"],
             "repository_id": r["repository_id"],
@@ -254,6 +260,7 @@ def get_document_detail(doc_id: int, current_user: dict = Depends(get_current_us
             "category": r["category"],
             "summary": r["executive_summary"],
             "raw_text": r["raw_text"],
+            "content_html": html_content,
             "metadata": meta
         }
 
@@ -358,12 +365,13 @@ def update_document_text(
             raise HTTPException(status_code=404, detail="Documento no encontrado o sin permisos")
             
         new_text = req.raw_text.strip()
+        new_html = req.content_html if req.content_html else text_lines_to_html(new_text)
         word_count = len(new_text.split())
         
-        # 1. Update text in database
+        # 1. Update text and rich HTML in database
         cursor.execute(
-            "UPDATE documents SET raw_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (new_text, doc_id)
+            "UPDATE documents SET raw_text = ?, content_html = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_text, new_html, doc_id)
         )
         stored_filename = doc["stored_filename"]
         file_extension = doc["file_extension"]
@@ -404,6 +412,42 @@ def update_document_text(
         
     return get_document_detail(doc_id=doc_id, current_user=current_user)
 
+@router.get("/{doc_id}/images/{filename}")
+def get_document_image(doc_id: int, filename: str):
+    doc_dir = get_doc_images_dir(doc_id)
+    file_path = doc_dir / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Imagen no encontrada")
+    ext = file_path.suffix.lower()
+    mime = "image/png"
+    if ext in [".jpg", ".jpeg"]:
+        mime = "image/jpeg"
+    elif ext == ".webp":
+        mime = "image/webp"
+    elif ext == ".gif":
+        mime = "image/gif"
+    return FileResponse(file_path, media_type=mime)
+
+@router.post("/{doc_id}/images")
+async def upload_document_image(
+    doc_id: int,
+    image: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    doc_dir = get_doc_images_dir(doc_id)
+    ext = Path(image.filename).suffix.lower()
+    if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif"]:
+        raise HTTPException(status_code=400, detail="Formato de imagen no permitido (.png, .jpg, .webp, .gif)")
+    safe_name = f"img_{uuid.uuid4().hex[:8]}{ext}"
+    dest = doc_dir / safe_name
+    content = await image.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+    return {
+        "url": f"/api/documents/{doc_id}/images/{safe_name}",
+        "filename": safe_name
+    }
+
 @router.post("/{doc_id}/ai-edit", response_model=DocumentAiEditResponse)
 def ai_edit_document(
     doc_id: int,
@@ -414,10 +458,10 @@ def ai_edit_document(
         cursor = conn.cursor()
         is_admin = current_user.get("role") == "ADMIN"
         if is_admin:
-            cursor.execute("SELECT raw_text FROM documents WHERE id = ?", (doc_id,))
+            cursor.execute("SELECT raw_text, content_html FROM documents WHERE id = ?", (doc_id,))
         else:
             cursor.execute("""
-            SELECT d.raw_text
+            SELECT d.raw_text, d.content_html
             FROM documents d
             JOIN repositories r ON d.repository_id = r.id
             WHERE d.id = ? AND r.user_id = ?

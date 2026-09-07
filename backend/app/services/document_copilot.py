@@ -47,7 +47,16 @@ INSTRUCCIONES CRÍTICAS DE FORMATO:
      <<<PROPUESTA_TEXTUAL>>>
      (Escribe aquí el texto exacto, bien formateado y listo para ser aplicado)
      <<<FIN_PROPUESTA>>>
-2. Si el usuario únicamente hace una pregunta o pide una explicación sin solicitar cambios de texto en el documento, responde directamente de forma clara y concisa SIN usar las etiquetas <<<PROPUESTA_TEXTUAL>>>.
+2. Si el usuario solicita crear, agregar o estructurar una TABLA (ej: cronograma, costos, presupuesto, entregables o matriz comparativa):
+   - Redacta la tabla usando código HTML visual estructurado con la clase "doc-table":
+     <table class="doc-table">
+       <thead><tr><th>Encabezado 1</th><th>Encabezado 2</th><th>Encabezado 3</th></tr></thead>
+       <tbody>
+         <tr><td>Dato 1</td><td>Dato 2</td><td>Dato 3</td></tr>
+       </tbody>
+     </table>
+   - Coloca la tabla HTML completa dentro de <<<PROPUESTA_TEXTUAL>>> para que el usuario la inserte con 1 clic.
+3. Si el usuario únicamente hace una pregunta o pide una explicación sin solicitar cambios ni tablas en el documento, responde directamente de forma clara y concisa SIN usar las etiquetas <<<PROPUESTA_TEXTUAL>>>.
 
 Asegúrate de que el lenguaje sea formal, preciso y con terminología empresarial adecuada.
 """
@@ -135,6 +144,26 @@ def local_copilot_fallback(
         return {
             "reply": "He extraído los puntos principales del documento:",
             "suggested_text": summary,
+            "mode": "suggestion",
+            "model_used": "Motor Local DocuMind Copilot (Modo Contingencia)"
+        }
+
+    if any(w in p_lower for w in ["tabla", "cuadro", "cronograma", "presupuesto", "matriz"]):
+        tbl = (
+            '<table class="doc-table">\n'
+            '  <thead>\n'
+            '    <tr><th>Ítem / Concepto</th><th>Descripción</th><th>Plazo / Fecha</th><th>Valor Estimado</th></tr>\n'
+            '  </thead>\n'
+            '  <tbody>\n'
+            '    <tr><td>Fase 1: Diagnóstico</td><td>Levantamiento de requerimientos y auditoría</td><td>Semana 1-2</td><td>$ 3.500.000 COP</td></tr>\n'
+            '    <tr><td>Fase 2: Implementación</td><td>Configuración, parametrización y pruebas</td><td>Semana 3-6</td><td>$ 7.800.000 COP</td></tr>\n'
+            '    <tr><td>Fase 3: Capacitación</td><td>Transferencia de conocimiento a usuarios</td><td>Semana 7</td><td>$ 1.200.000 COP</td></tr>\n'
+            '  </tbody>\n'
+            '</table>'
+        )
+        return {
+            "reply": "He generado una tabla estructurada con formato corporativo lista para el documento:",
+            "suggested_text": tbl,
             "mode": "suggestion",
             "model_used": "Motor Local DocuMind Copilot (Modo Contingencia)"
         }

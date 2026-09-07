@@ -2,7 +2,7 @@
 // DOCUMIND APP CONTROLLER - EVENT BINDINGS & VIEW STATE
 // ==========================================================================
 
-import { api } from './api.js?v=3.0';
+import { api } from './api.js?v=3.5';
 import { 
   renderDocumentCard, 
   renderDocumentModal, 
@@ -12,7 +12,7 @@ import {
   formatBytes,
   CATEGORY_NAMES,
   CATEGORY_CLASSES
-} from './components.js?v=3.0';
+} from './components.js?v=3.5';
 
 class DocuMindApp {
   constructor() {
@@ -689,14 +689,17 @@ class DocuMindApp {
         doc, 
         (id) => this.reprocessDocument(id),
         downloadUrl,
-        async (id, newText) => {
-          const updated = await api.updateDocumentText(id, newText);
+        async (id, newText, newHtml) => {
+          const updated = await api.updateDocumentText(id, newText, newHtml);
           showToast('Documento guardado y re-indexado exitosamente', 'success');
           await this.loadDocuments();
           return updated;
         },
         async (id, prompt, currentText, selectedText) => {
           return await api.aiEditDocument(id, prompt, currentText, selectedText);
+        },
+        async (id, file) => {
+          return await api.uploadDocumentImage(id, file);
         }
       );
       document.body.appendChild(modal);

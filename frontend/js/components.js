@@ -195,8 +195,8 @@ export function renderDocumentCard(doc, onSelect, onDelete) {
   return card;
 }
 
-// Render Document Detail Modal (Word-like Editor & Gemini Copilot Studio)
-export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, onAiEdit) {
+// Render Document Detail Modal (Word-like Rich WYSIWYG Editor & Gemini Copilot Studio)
+export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, onAiEdit, onUploadImage) {
   const meta = doc.metadata || {};
   const entities = meta.extracted_entities || {};
   const catLabel = CATEGORY_NAMES[meta.category] || doc.category || 'Sin Clasificar';
@@ -222,8 +222,63 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  const initialText = doc.raw_text || '';
-  const undoStack = [initialText];
+  // Convert markdown tables and plain text lines into rich HTML
+  function convertMarkdownOrTextToHtml(text) {
+    if (!text) return '<p></p>';
+    if (text.includes('<table') || text.includes('<p>') || text.includes('<h1>')) {
+      return text;
+    }
+    const lines = text.split('\n');
+    const out = [];
+    let tableBuf = [];
+
+    function flushTbl(buf) {
+      if (!buf.length) return '';
+      let res = '<table class="doc-table"><thead><tr>';
+      const headers = buf[0].split('|').map(c => c.trim()).filter(Boolean);
+      headers.forEach(h => { res += `<th>${escapeHtml(h)}</th>`; });
+      res += '</tr></thead><tbody>';
+      for (let i = 1; i < buf.length; i++) {
+        if (/^\s*\|?[-:\s|]+\|?\s*$/.test(buf[i])) continue;
+        const cells = buf[i].split('|').map(c => c.trim()).filter(Boolean);
+        if (cells.length) {
+          res += '<tr>' + cells.map(c => `<td>${escapeHtml(c)}</td>`).join('') + '</tr>';
+        }
+      }
+      res += '</tbody></table>';
+      return res;
+    }
+
+    for (const line of lines) {
+      const s = line.trim();
+      if (s.includes('|') && s.split('|').length >= 3) {
+        tableBuf.push(s);
+      } else {
+        if (tableBuf.length) {
+          out.push(flushTbl(tableBuf));
+          tableBuf = [];
+        }
+        if (s.startsWith('# ')) {
+          out.push(`<h1>${escapeHtml(s.slice(2).trim())}</h1>`);
+        } else if (s.startsWith('## ')) {
+          out.push(`<h2>${escapeHtml(s.slice(3).trim())}</h2>`);
+        } else if (s.startsWith('### ')) {
+          out.push(`<h3>${escapeHtml(s.slice(4).trim())}</h3>`);
+        } else if (s.startsWith('• ') || s.startsWith('- ') || s.startsWith('* ')) {
+          out.push(`<ul><li>${escapeHtml(s.slice(2).trim())}</li></ul>`);
+        } else if (s) {
+          out.push(`<p>${escapeHtml(s)}</p>`);
+        }
+      }
+    }
+    if (tableBuf.length) out.push(flushTbl(tableBuf));
+    return out.join('\n');
+  }
+
+  const initialHtml = doc.content_html && doc.content_html.trim() 
+    ? doc.content_html 
+    : convertMarkdownOrTextToHtml(doc.raw_text || '');
+  const undoStack = [initialHtml];
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -264,16 +319,26 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
           <div class="editor-sheet-container">
             <!-- Barra de Herramientas -->
             <div class="editor-toolbar">
+              <!-- Formato de Texto -->
               <div class="editor-tool-group">
-                <button class="editor-tool-btn" data-tool="bold" title="Negrita (**texto**)"><b>B</b></button>
-                <button class="editor-tool-btn" data-tool="italic" title="Cursiva (*texto*)"><i>I</i></button>
-                <button class="editor-tool-btn" data-tool="h1" title="Título 1 (# )">H1</button>
-                <button class="editor-tool-btn" data-tool="h2" title="Título 2 (## )">H2</button>
-                <button class="editor-tool-btn" data-tool="bullet" title="Viñeta (• )">• Lista</button>
+                <button class="editor-tool-btn" data-tool="bold" title="Negrita (Ctrl+B)"><b>B</b></button>
+                <button class="editor-tool-btn" data-tool="italic" title="Cursiva (Ctrl+I)"><i>I</i></button>
+                <button class="editor-tool-btn" data-tool="h1" title="Encabezado H1">H1</button>
+                <button class="editor-tool-btn" data-tool="h2" title="Subtítulo H2">H2</button>
+                <button class="editor-tool-btn" data-tool="bullet" title="Lista con viñetas">• Lista</button>
               </div>
 
-              <div class="editor-tool-group" style="flex-grow: 1; min-width: 140px;">
-                <input type="text" id="editor-find-input" placeholder="🔍 Buscar en documento..." 
+              <!-- Herramientas de Tablas e Imágenes -->
+              <div class="editor-tool-group">
+                <button id="btn-insert-table" class="editor-tool-btn" title="Insertar nueva tabla">📊 Tabla</button>
+                <button id="btn-add-table-row" class="editor-tool-btn" title="Agregar fila a la tabla">+ Fila</button>
+                <button id="btn-add-table-col" class="editor-tool-btn" title="Agregar columna a la tabla">+ Col</button>
+                <button id="btn-insert-image" class="editor-tool-btn" title="Subir e insertar imagen">🖼️ Imagen</button>
+                <input type="file" id="editor-image-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display: none;">
+              </div>
+
+              <div class="editor-tool-group" style="flex-grow: 1; min-width: 120px;">
+                <input type="text" id="editor-find-input" placeholder="🔍 Buscar en texto..." 
                        style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); width: 100%;">
               </div>
 
@@ -285,15 +350,15 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
               </div>
             </div>
 
-            <!-- Paper Sheet Canvas -->
+            <!-- Paper Sheet Canvas (WYSIWYG contenteditable) -->
             <div class="editor-paper-wrapper">
-              <textarea id="doc-editor-textarea" class="doc-editor-sheet" spellcheck="true" placeholder="Escribe o modifica el documento aquí...">${escapeHtml(initialText)}</textarea>
+              <div id="doc-editor-sheet" class="doc-editor-sheet" contenteditable="true" spellcheck="true">${initialHtml}</div>
             </div>
 
             <!-- Statusbar -->
             <div class="editor-statusbar">
               <span id="editor-word-count">Palabras: 0 | Caracteres: 0</span>
-              <span id="editor-save-status" style="color: var(--text-muted); font-size: 0.74rem;">Modo de Edición Activo</span>
+              <span id="editor-save-status" style="color: var(--text-muted); font-size: 0.74rem;">Modo de Edición WYSIWYG Activo</span>
             </div>
           </div>
 
@@ -304,7 +369,7 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
                 <span style="font-size: 1.15rem;">🤖</span>
                 <div>
                   <strong style="font-size: 0.85rem;">Gemini Copilot de Documento</strong>
-                  <div style="font-size: 0.7rem; color: var(--text-muted);">Asistente inteligente de redacción y edición</div>
+                  <div style="font-size: 0.7rem; color: var(--text-muted);">Asistente de redacción, tablas y análisis</div>
                 </div>
               </div>
               <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: var(--accent-secondary); font-size: 0.7rem;">Google Gemini</span>
@@ -312,24 +377,25 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
 
             <!-- Sugerencias Rápidas -->
             <div class="copilot-pills">
+              <button class="copilot-pill" data-prompt="Crea una tabla con cronograma, etapas, responsables y plazos de entrega.">📊 Crear tabla cronograma</button>
+              <button class="copilot-pill" data-prompt="Crea una tabla con desglose de costos, descripción, valor unitario y total en COP.">💰 Tabla de presupuesto</button>
               <button class="copilot-pill" data-prompt="Mejora la redacción, estilo formal y ortografía de este documento.">✍️ Mejorar redacción</button>
               <button class="copilot-pill" data-prompt="Redacta y agrega una cláusula penal por incumplimiento del 20% con términos comerciales estándar.">⚖️ Cláusula penal</button>
               <button class="copilot-pill" data-prompt="Redacta y agrega una cláusula de confidencialidad y reserva de información por 5 años.">🔒 Confidencialidad</button>
               <button class="copilot-pill" data-prompt="Genera una síntesis ejecutiva estructurada en viñetas para incluir al inicio del documento.">📑 Resumen</button>
-              <button class="copilot-pill" data-prompt="Traduce este documento al inglés formal corporativo.">🌐 Traducir inglés</button>
             </div>
 
             <!-- Mensajes Copilot -->
             <div id="copilot-messages" class="copilot-messages">
               <div class="copilot-bubble bot">
-                ¡Hola! Soy tu <strong>Gemini Copilot</strong> empotrado. Puedo redactar cláusulas, mejorar la redacción, resumir o responder preguntas sobre este documento. Usa los botones rápidos o escribe abajo cualquier cambio que desees aplicar.
+                ¡Hola! Soy tu <strong>Gemini Copilot</strong> empotrado. Puedo redactar cláusulas, <strong>generar tablas estructuradas</strong>, mejorar redacciones o responder consultas. Lo que genere lo puedes insertar directamente en el documento con el botón <strong>⚡ Aplicar al Documento</strong>.
               </div>
             </div>
 
             <!-- Input Bar -->
             <form id="copilot-form" class="copilot-input-bar">
               <input type="text" id="copilot-input" class="form-control" 
-                     placeholder="Pide un cambio a Gemini (ej: añade cláusula de garantía de 1 año)..." 
+                     placeholder="Pide un cambio o tabla a Gemini (ej: genera una tabla de costos)..." 
                      style="font-size: 0.8rem; padding: 0.45rem 0.75rem; border-radius: 6px;" required autocomplete="off">
               <button type="submit" class="btn-primary" style="width: auto; padding: 0.45rem 0.9rem; font-size: 0.8rem;">
                 Enviar
@@ -361,7 +427,7 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
             </div>
 
             <div id="doc-text-container" style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius-sm); max-height: 480px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; line-height: 1.5; color: var(--text-secondary); border: 1px solid var(--border-color);">
-              ${escapeHtml(initialText)}
+              ${escapeHtml(doc.raw_text || '')}
             </div>
           </div>
 
@@ -410,13 +476,19 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
   const tabContentEditor = modal.querySelector('#tab-content-editor');
   const tabContentAnalysis = modal.querySelector('#tab-content-analysis');
 
-  const textarea = modal.querySelector('#doc-editor-textarea');
+  const editorSheet = modal.querySelector('#doc-editor-sheet');
   const wordCountSpan = modal.querySelector('#editor-word-count');
   const unsavedIndicator = modal.querySelector('#unsaved-indicator');
   const btnSaveEditor = modal.querySelector('#btn-save-editor');
   const btnUndoEditor = modal.querySelector('#btn-undo-editor');
   const editorFindInput = modal.querySelector('#editor-find-input');
   const editorSaveStatus = modal.querySelector('#editor-save-status');
+
+  const btnInsertTable = modal.querySelector('#btn-insert-table');
+  const btnAddTableRow = modal.querySelector('#btn-add-table-row');
+  const btnAddTableCol = modal.querySelector('#btn-add-table-col');
+  const btnInsertImage = modal.querySelector('#btn-insert-image');
+  const editorImageFileInput = modal.querySelector('#editor-image-file-input');
 
   const copilotMessages = modal.querySelector('#copilot-messages');
   const copilotForm = modal.querySelector('#copilot-form');
@@ -438,16 +510,15 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
     tabBtnEditor.classList.remove('active');
     tabContentAnalysis.classList.remove('hidden');
     tabContentEditor.classList.add('hidden');
-    // Update preview container with current textarea value
     const previewContainer = modal.querySelector('#doc-text-container');
     if (previewContainer) {
-      previewContainer.textContent = textarea.value;
+      previewContainer.textContent = editorSheet.innerText;
     }
   });
 
   // --- Word / Char Counting ---
   function updateCounters() {
-    const text = textarea.value;
+    const text = editorSheet.innerText || '';
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     const chars = text.length;
     wordCountSpan.textContent = `Palabras: ${words} | Caracteres: ${chars}`;
@@ -455,7 +526,7 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
   updateCounters();
 
   // --- Editor Input Listener ---
-  textarea.addEventListener('input', () => {
+  editorSheet.addEventListener('input', () => {
     hasUnsavedChanges = true;
     unsavedIndicator.style.display = 'inline-flex';
     editorSaveStatus.textContent = '● Cambios sin guardar';
@@ -463,43 +534,169 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
     updateCounters();
   });
 
-  // --- Toolbar Actions ---
+  // Save history on changes
+  editorSheet.addEventListener('keyup', () => {
+    if (undoStack.length === 0 || undoStack[undoStack.length - 1] !== editorSheet.innerHTML) {
+      if (undoStack.length > 30) undoStack.shift();
+      undoStack.push(editorSheet.innerHTML);
+    }
+  });
+
+  // --- Basic Formatting Actions ---
   modal.querySelectorAll('.editor-tool-btn[data-tool]').forEach(btn => {
     btn.addEventListener('click', () => {
       const tool = btn.getAttribute('data-tool');
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const val = textarea.value;
-      const selected = val.substring(start, end);
-
-      let replacement = '';
+      editorSheet.focus();
       if (tool === 'bold') {
-        replacement = selected ? `**${selected}**` : `**texto en negrita**`;
+        document.execCommand('bold', false, null);
       } else if (tool === 'italic') {
-        replacement = selected ? `*${selected}*` : `*texto en cursiva*`;
+        document.execCommand('italic', false, null);
       } else if (tool === 'h1') {
-        replacement = `\n# ${selected || 'Título Principal'}\n`;
+        document.execCommand('formatBlock', false, '<h1>');
       } else if (tool === 'h2') {
-        replacement = `\n## ${selected || 'Subtítulo'}\n`;
+        document.execCommand('formatBlock', false, '<h2>');
       } else if (tool === 'bullet') {
-        replacement = `\n• ${selected || 'Elemento de lista'}\n`;
+        document.execCommand('insertUnorderedList', false, null);
       }
-
-      undoStack.push(val);
-      textarea.value = val.substring(0, start) + replacement + val.substring(end);
-      textarea.dispatchEvent(new Event('input'));
-      textarea.focus();
-      textarea.setSelectionRange(start, start + replacement.length);
+      editorSheet.dispatchEvent(new Event('input'));
     });
   });
+
+  // --- Table Insertion Action ---
+  if (btnInsertTable) {
+    btnInsertTable.addEventListener('click', () => {
+      editorSheet.focus();
+      const rows = parseInt(prompt('¿Cuántas filas de datos tendrá la tabla?', '3')) || 3;
+      const cols = parseInt(prompt('¿Cuántas columnas tendrá la tabla?', '3')) || 3;
+      
+      let tblHtml = '<table class="doc-table"><thead><tr>';
+      for (let c = 1; c <= cols; c++) {
+        tblHtml += `<th>Encabezado ${c}</th>`;
+      }
+      tblHtml += '</tr></thead><tbody>';
+      for (let r = 1; r <= rows; r++) {
+        tblHtml += '<tr>';
+        for (let c = 1; c <= cols; c++) {
+          tblHtml += `<td>Dato ${r}.${c}</td>`;
+        }
+        tblHtml += '</tr>';
+      }
+      tblHtml += '</tbody></table><p><br></p>';
+
+      document.execCommand('insertHTML', false, tblHtml);
+      editorSheet.dispatchEvent(new Event('input'));
+    });
+  }
+
+  // --- Add Table Row Action ---
+  if (btnAddTableRow) {
+    btnAddTableRow.addEventListener('click', () => {
+      // Find table currently focused or active
+      let targetTable = null;
+      const sel = window.getSelection();
+      if (sel && sel.anchorNode) {
+        let el = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+        targetTable = el ? el.closest('table') : null;
+      }
+      if (!targetTable) {
+        const allTables = editorSheet.querySelectorAll('table');
+        if (allTables.length) targetTable = allTables[allTables.length - 1];
+      }
+
+      if (!targetTable) {
+        alert('Coloca el cursor dentro de una tabla o inserta una primero con el botón 📊 Tabla.');
+        return;
+      }
+
+      const tbody = targetTable.querySelector('tbody') || targetTable;
+      const colCount = targetTable.querySelectorAll('tr')[0] ? targetTable.querySelectorAll('tr')[0].children.length : 3;
+      const tr = document.createElement('tr');
+      for (let i = 0; i < colCount; i++) {
+        const td = document.createElement('td');
+        td.textContent = 'Nueva celda';
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+      editorSheet.dispatchEvent(new Event('input'));
+    });
+  }
+
+  // --- Add Table Column Action ---
+  if (btnAddTableCol) {
+    btnAddTableCol.addEventListener('click', () => {
+      let targetTable = null;
+      const sel = window.getSelection();
+      if (sel && sel.anchorNode) {
+        let el = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+        targetTable = el ? el.closest('table') : null;
+      }
+      if (!targetTable) {
+        const allTables = editorSheet.querySelectorAll('table');
+        if (allTables.length) targetTable = allTables[allTables.length - 1];
+      }
+
+      if (!targetTable) {
+        alert('Coloca el cursor dentro de una tabla para agregarle columnas.');
+        return;
+      }
+
+      // Add th to thead
+      const theadTr = targetTable.querySelector('thead tr');
+      if (theadTr) {
+        const th = document.createElement('th');
+        th.textContent = `Col ${theadTr.children.length + 1}`;
+        theadTr.appendChild(th);
+      }
+
+      // Add td to each tbody tr
+      const tbodyTrs = targetTable.querySelectorAll('tbody tr');
+      tbodyTrs.forEach(tr => {
+        const td = document.createElement('td');
+        td.textContent = 'Dato';
+        tr.appendChild(td);
+      });
+      editorSheet.dispatchEvent(new Event('input'));
+    });
+  }
+
+  // --- Image Insertion & Upload Action ---
+  if (btnInsertImage && editorImageFileInput) {
+    btnInsertImage.addEventListener('click', () => {
+      editorImageFileInput.click();
+    });
+
+    editorImageFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      btnInsertImage.disabled = true;
+      btnInsertImage.textContent = '⏳ Subiendo...';
+      try {
+        if (typeof onUploadImage === 'function') {
+          const res = await onUploadImage(doc.id, file);
+          const imgHtml = `<div class="doc-img-wrapper"><img src="${res.url}" class="doc-img" alt="${escapeHtml(res.filename)}" /></div><p><br></p>`;
+          editorSheet.focus();
+          document.execCommand('insertHTML', false, imgHtml);
+          editorSheet.dispatchEvent(new Event('input'));
+        }
+      } catch (err) {
+        alert(`Error subiendo imagen: ${err.message}`);
+      } finally {
+        btnInsertImage.disabled = false;
+        btnInsertImage.textContent = '🖼️ Imagen';
+        editorImageFileInput.value = '';
+      }
+    });
+  }
 
   // --- Undo Action ---
   if (btnUndoEditor) {
     btnUndoEditor.addEventListener('click', () => {
-      if (undoStack.length > 0) {
-        const prev = undoStack.pop();
-        textarea.value = prev;
-        textarea.dispatchEvent(new Event('input'));
+      if (undoStack.length > 1) {
+        undoStack.pop(); // discard current
+        const prev = undoStack[undoStack.length - 1];
+        editorSheet.innerHTML = prev;
+        editorSheet.dispatchEvent(new Event('input'));
       }
     });
   }
@@ -507,12 +704,10 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
   // --- Find in Editor ---
   if (editorFindInput) {
     editorFindInput.addEventListener('input', () => {
-      const query = editorFindInput.value.trim().toLowerCase();
+      const query = editorFindInput.value.trim();
       if (!query) return;
-      const idx = textarea.value.toLowerCase().indexOf(query);
-      if (idx !== -1) {
-        textarea.focus();
-        textarea.setSelectionRange(idx, idx + query.length);
+      if (window.find) {
+        window.find(query, false, false, true, false, false, false);
       }
     });
   }
@@ -520,19 +715,19 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
   // --- Save Changes to Backend ---
   if (btnSaveEditor) {
     btnSaveEditor.addEventListener('click', async () => {
-      const newText = textarea.value;
+      const rawText = editorSheet.innerText || '';
+      const contentHtml = editorSheet.innerHTML || '';
       btnSaveEditor.disabled = true;
       btnSaveEditor.textContent = '⏳ Guardando...';
       try {
         if (typeof onSaveText === 'function') {
-          const updated = await onSaveText(doc.id, newText);
+          const updated = await onSaveText(doc.id, rawText, contentHtml);
           hasUnsavedChanges = false;
           unsavedIndicator.style.display = 'none';
           editorSaveStatus.textContent = '✓ Guardado y re-indexado con éxito';
           editorSaveStatus.style.color = 'var(--success)';
           btnSaveEditor.textContent = '✓ Guardado';
           
-          // Update analysis tab if new metadata arrived
           if (updated && updated.metadata) {
             const summaryBox = modal.querySelector('#analysis-summary-box');
             if (summaryBox && updated.metadata.executive_summary) {
@@ -562,10 +757,9 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
   async function sendCopilotPrompt(promptText) {
     if (!promptText.trim()) return;
 
-    // Get optional user selection
-    const selStart = textarea.selectionStart;
-    const selEnd = textarea.selectionEnd;
-    const selectedText = (selStart !== selEnd) ? textarea.value.substring(selStart, selEnd) : null;
+    // Selected text from editor sheet
+    const sel = window.getSelection();
+    const selectedText = sel ? sel.toString().trim() : null;
 
     // Append User message
     const userBubble = document.createElement('div');
@@ -577,13 +771,13 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
     // Append Bot Loading message
     const loadingBubble = document.createElement('div');
     loadingBubble.className = 'copilot-bubble bot';
-    loadingBubble.innerHTML = `<span>Analizando documento y redactando con Gemini Copilot... 🔍</span>`;
+    loadingBubble.innerHTML = `<span>Analizando documento y generando con Gemini Copilot... 🔍</span>`;
     copilotMessages.appendChild(loadingBubble);
     copilotMessages.scrollTop = copilotMessages.scrollHeight;
 
     try {
       if (typeof onAiEdit === 'function') {
-        const res = await onAiEdit(doc.id, promptText, textarea.value, selectedText);
+        const res = await onAiEdit(doc.id, promptText, editorSheet.innerText, selectedText);
         loadingBubble.remove();
 
         const botBubble = document.createElement('div');
@@ -591,12 +785,17 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
 
         let proposalHtml = '';
         if (res.suggested_text) {
+          const isTableOrHtml = res.suggested_text.includes('<table') || res.suggested_text.includes('<h');
+          const previewContent = isTableOrHtml 
+            ? `<div style="overflow-x: auto; max-height: 200px; padding: 0.5rem; background: var(--bg-primary); border-radius: 4px; border: 1px solid var(--border-color);">${res.suggested_text}</div>`
+            : `<div class="copilot-proposal-text">${escapeHtml(res.suggested_text)}</div>`;
+
           proposalHtml = `
             <div class="copilot-proposal-box">
               <div style="font-size: 0.74rem; font-weight: 700; color: var(--accent-primary); margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.3rem;">
-                <span>✨</span> Propuesta de Modificación para el Documento:
+                <span>✨</span> Propuesta de Modificación / Tabla para el Documento:
               </div>
-              <div class="copilot-proposal-text">${escapeHtml(res.suggested_text)}</div>
+              ${previewContent}
               <div class="copilot-proposal-actions">
                 <button type="button" class="btn-secondary btn-copy-proposal" style="padding: 0.3rem 0.6rem; font-size: 0.72rem;">📋 Copiar</button>
                 <button type="button" class="btn-primary btn-apply-proposal" style="padding: 0.3rem 0.75rem; font-size: 0.74rem;">⚡ Aplicar al Documento</button>
@@ -617,27 +816,30 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, o
         const btnApply = botBubble.querySelector('.btn-apply-proposal');
         if (btnApply && res.suggested_text) {
           btnApply.addEventListener('click', () => {
-            undoStack.push(textarea.value);
-            const currentVal = textarea.value;
-            const startPos = textarea.selectionStart;
-            const endPos = textarea.selectionEnd;
+            if (undoStack.length > 30) undoStack.shift();
+            undoStack.push(editorSheet.innerHTML);
 
-            if (startPos !== endPos) {
-              // Replace selected text
-              textarea.value = currentVal.substring(0, startPos) + res.suggested_text + currentVal.substring(endPos);
-            } else {
-              // Append with clean paragraph break
-              textarea.value = currentVal.trim() + '\n\n' + res.suggested_text;
+            editorSheet.focus();
+            let insertSnippet = res.suggested_text;
+            if (!insertSnippet.includes('<table') && !insertSnippet.includes('<p>') && !insertSnippet.includes('<h')) {
+              insertSnippet = convertMarkdownOrTextToHtml(insertSnippet);
             }
 
-            textarea.dispatchEvent(new Event('input'));
+            // If text is selected, replace selection; else append to bottom
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount > 0 && sel.toString().trim()) {
+              document.execCommand('insertHTML', false, insertSnippet);
+            } else {
+              editorSheet.innerHTML += `<div><br></div>${insertSnippet}<div><br></div>`;
+            }
+
+            editorSheet.dispatchEvent(new Event('input'));
             btnApply.textContent = '✓ Aplicado';
             btnApply.disabled = true;
             btnApply.style.background = 'var(--success)';
             
             // Switch to editor tab if not visible
             tabBtnEditor.click();
-            textarea.focus();
           });
         }
 

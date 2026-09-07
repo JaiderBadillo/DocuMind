@@ -60,11 +60,13 @@ class DocumentResponse(BaseModel):
 
 class DocumentDetailResponse(DocumentResponse):
     raw_text: Optional[str] = None
+    content_html: Optional[str] = None
     metadata: Optional[MetadataResponse] = None
 
 # ================= DOCUMENT EDIT & COPILOT SCHEMAS =================
 class DocumentUpdateRequest(BaseModel):
     raw_text: str
+    content_html: Optional[str] = None
 
 class DocumentAiEditRequest(BaseModel):
     prompt: str

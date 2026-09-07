@@ -68,11 +68,19 @@ def init_database():
             mime_type TEXT NOT NULL,
             processing_status TEXT DEFAULT 'PENDING',
             raw_text TEXT,
+            content_html TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE
         )
         """)
+        
+        # Auto-migration for content_html in existing databases
+        cursor.execute("PRAGMA table_info(documents)")
+        cols = [r["name"] for r in cursor.fetchall()]
+        if "content_html" not in cols:
+            cursor.execute("ALTER TABLE documents ADD COLUMN content_html TEXT")
+        
         
         # 4. Document Metadata table (AI extraction)
         cursor.execute("""

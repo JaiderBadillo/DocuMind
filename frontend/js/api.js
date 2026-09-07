@@ -167,10 +167,19 @@ class ApiClient {
     return `${API_BASE}/documents/${docId}/download`;
   }
 
-  async updateDocumentText(docId, rawText) {
+  async updateDocumentText(docId, rawText, contentHtml = null) {
     return await this.request(`/documents/${docId}`, {
       method: 'PUT',
-      body: JSON.stringify({ raw_text: rawText })
+      body: JSON.stringify({ raw_text: rawText, content_html: contentHtml })
+    });
+  }
+
+  async uploadDocumentImage(docId, file) {
+    const formData = new FormData();
+    formData.append('image', file);
+    return await this.request(`/documents/${docId}/images`, {
+      method: 'POST',
+      body: formData
     });
   }
 
