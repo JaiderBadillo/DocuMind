@@ -10,14 +10,27 @@ router = APIRouter(prefix="/repositories", tags=["Repositorios"])
 def list_repositories(current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-        SELECT r.id, r.user_id, r.name, r.description, r.created_at,
-               COUNT(d.id) AS document_count
-        FROM repositories r
-        LEFT JOIN documents d ON r.id = d.repository_id
-        GROUP BY r.id
-        ORDER BY r.created_at DESC
-        """)
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("""
+            SELECT r.id, r.user_id, r.name, r.description, r.created_at,
+                   COUNT(d.id) AS document_count
+            FROM repositories r
+            LEFT JOIN documents d ON r.id = d.repository_id
+            GROUP BY r.id
+            ORDER BY r.created_at DESC
+            """)
+        else:
+            cursor.execute("""
+            SELECT r.id, r.user_id, r.name, r.description, r.created_at,
+                   COUNT(d.id) AS document_count
+            FROM repositories r
+            LEFT JOIN documents d ON r.id = d.repository_id
+            WHERE r.user_id = ?
+            GROUP BY r.id
+            ORDER BY r.created_at DESC
+            """, (current_user["user_id"],))
+            
         rows = cursor.fetchall()
         return [
             {
@@ -57,10 +70,14 @@ def create_repository(repo: RepositoryCreate, current_user: dict = Depends(get_c
 def delete_repository(repo_id: int, current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM repositories WHERE id = ?", (repo_id,))
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("SELECT name FROM repositories WHERE id = ?", (repo_id,))
+        else:
+            cursor.execute("SELECT name FROM repositories WHERE id = ? AND user_id = ?", (repo_id, current_user["user_id"]))
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Repositorio no encontrado")
+            raise HTTPException(status_code=404, detail="Repositorio no encontrado o no tiene permisos para eliminarlo")
             
         cursor.execute("DELETE FROM repositories WHERE id = ?", (repo_id,))
         log_audit("REPO_DELETE", "SUCCESS", f"Repositorio '{row['name']}' eliminado", user_id=current_user["user_id"])

@@ -30,6 +30,18 @@ def register_user(user: UserCreate):
         )
         user_id = cursor.lastrowid
         
+        default_repos = [
+            ("Contratos y Acuerdos Legales", "Repositorio de minutas, contratos de prestación de servicios y confidencialidad."),
+            ("Facturación y Finanzas", "Comprobantes fiscales, facturas electrónicas y órdenes de compra."),
+            ("Talento Humano y Selección", "Hojas de vida de candidatos, perfiles de competencias y certificaciones."),
+            ("Informes Técnicos de TI", "Arquitectura de software, planes de contingencia y manuales de operaciones.")
+        ]
+        for name, desc in default_repos:
+            cursor.execute(
+                "INSERT INTO repositories (user_id, name, description) VALUES (?, ?, ?)",
+                (user_id, name, desc)
+            )
+        
         cursor.execute("SELECT id, email, full_name, role, created_at FROM users WHERE id = ?", (user_id,))
         row = cursor.fetchone()
         

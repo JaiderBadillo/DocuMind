@@ -10,32 +10,78 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard y Métricas"])
 def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
+        is_admin = current_user.get("role") == "ADMIN"
+        user_id = current_user.get("user_id")
         
         # 1. Total documents & storage
-        cursor.execute("SELECT COUNT(*) as count, COALESCE(SUM(file_size_bytes), 0) as total_size FROM documents")
-        doc_stat = cursor.fetchone()
-        total_docs = doc_stat["count"] or 0
-        total_bytes = doc_stat["total_size"] or 0
-        
-        # 2. Total repositories
-        cursor.execute("SELECT COUNT(*) as count FROM repositories")
-        total_repos = cursor.fetchone()["count"] or 0
-        
-        # 3. Status breakdown
-        cursor.execute("SELECT processing_status, COUNT(*) as count FROM documents GROUP BY processing_status")
-        status_rows = cursor.fetchall()
+        if is_admin:
+            cursor.execute("SELECT COUNT(*) as count, COALESCE(SUM(file_size_bytes), 0) as total_size FROM documents")
+            doc_stat = cursor.fetchone()
+            total_docs = doc_stat["count"] or 0
+            total_bytes = doc_stat["total_size"] or 0
+            
+            cursor.execute("SELECT COUNT(*) as count FROM repositories")
+            total_repos = cursor.fetchone()["count"] or 0
+            
+            cursor.execute("SELECT processing_status, COUNT(*) as count FROM documents GROUP BY processing_status")
+            status_rows = cursor.fetchall()
+            
+            cursor.execute("""
+            SELECT COALESCE(m.category, 'SIN_CLASIFICAR') as category, COUNT(*) as count
+            FROM documents d
+            LEFT JOIN document_metadata m ON d.id = m.document_id
+            GROUP BY category
+            """)
+            cat_rows = cursor.fetchall()
+            
+            cursor.execute("SELECT file_extension, COUNT(*) as count FROM documents GROUP BY file_extension")
+            fmt_rows = cursor.fetchall()
+        else:
+            cursor.execute("""
+            SELECT COUNT(d.id) as count, COALESCE(SUM(d.file_size_bytes), 0) as total_size
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            WHERE r.user_id = ?
+            """, (user_id,))
+            doc_stat = cursor.fetchone()
+            total_docs = doc_stat["count"] or 0
+            total_bytes = doc_stat["total_size"] or 0
+            
+            cursor.execute("SELECT COUNT(*) as count FROM repositories WHERE user_id = ?", (user_id,))
+            total_repos = cursor.fetchone()["count"] or 0
+            
+            cursor.execute("""
+            SELECT d.processing_status, COUNT(*) as count
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            WHERE r.user_id = ?
+            GROUP BY d.processing_status
+            """, (user_id,))
+            status_rows = cursor.fetchall()
+            
+            cursor.execute("""
+            SELECT COALESCE(m.category, 'SIN_CLASIFICAR') as category, COUNT(*) as count
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            LEFT JOIN document_metadata m ON d.id = m.document_id
+            WHERE r.user_id = ?
+            GROUP BY category
+            """, (user_id,))
+            cat_rows = cursor.fetchall()
+            
+            cursor.execute("""
+            SELECT d.file_extension, COUNT(*) as count
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            WHERE r.user_id = ?
+            GROUP BY d.file_extension
+            """, (user_id,))
+            fmt_rows = cursor.fetchall()
+
         status_dict = {"PENDING": 0, "PROCESSING": 0, "COMPLETED": 0, "FAILED": 0}
         for r in status_rows:
             status_dict[r["processing_status"]] = r["count"]
             
-        # 4. Category breakdown
-        cursor.execute("""
-        SELECT COALESCE(m.category, 'SIN_CLASIFICAR') as category, COUNT(*) as count
-        FROM documents d
-        LEFT JOIN document_metadata m ON d.id = m.document_id
-        GROUP BY category
-        """)
-        cat_rows = cursor.fetchall()
         categories = []
         for r in cat_rows:
             count = r["count"]
@@ -46,9 +92,6 @@ def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
                 "percentage": pct
             })
             
-        # 5. Format breakdown
-        cursor.execute("SELECT file_extension, COUNT(*) as count FROM documents GROUP BY file_extension")
-        fmt_rows = cursor.fetchall()
         formats = [
             {"extension": r["file_extension"].upper(), "count": r["count"]}
             for r in fmt_rows

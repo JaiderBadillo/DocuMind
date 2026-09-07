@@ -78,9 +78,13 @@ async def upload_documents(
     
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM repositories WHERE id = ?", (repository_id,))
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("SELECT id FROM repositories WHERE id = ?", (repository_id,))
+        else:
+            cursor.execute("SELECT id FROM repositories WHERE id = ? AND user_id = ?", (repository_id, current_user["user_id"]))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Repositorio no encontrado")
+            raise HTTPException(status_code=404, detail="Repositorio no encontrado o sin permisos")
 
     for file in files:
         ext = Path(file.filename).suffix.lower()
@@ -138,15 +142,21 @@ def list_documents(
 ):
     with get_db() as conn:
         cursor = conn.cursor()
+        is_admin = current_user.get("role") == "ADMIN"
         sql = """
         SELECT d.id, d.repository_id, d.original_filename, d.file_extension,
                d.file_size_bytes, d.mime_type, d.processing_status, d.created_at,
                m.category, m.executive_summary
         FROM documents d
+        JOIN repositories r ON d.repository_id = r.id
         LEFT JOIN document_metadata m ON d.id = m.document_id
         WHERE 1=1
         """
         params = []
+        if not is_admin:
+            sql += " AND r.user_id = ?"
+            params.append(current_user["user_id"])
+            
         if repository_id:
             sql += " AND d.repository_id = ?"
             params.append(repository_id)
@@ -181,15 +191,28 @@ def list_documents(
 def get_document_detail(doc_id: int, current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-        SELECT d.id, d.repository_id, d.original_filename, d.file_extension,
-               d.file_size_bytes, d.mime_type, d.processing_status, d.created_at, d.raw_text,
-               m.category, m.category_confidence, m.executive_summary, m.extracted_entities_json,
-               m.token_count, m.word_count, m.processed_at
-        FROM documents d
-        LEFT JOIN document_metadata m ON d.id = m.document_id
-        WHERE d.id = ?
-        """, (doc_id,))
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("""
+            SELECT d.id, d.repository_id, d.original_filename, d.file_extension,
+                   d.file_size_bytes, d.mime_type, d.processing_status, d.created_at, d.raw_text,
+                   m.category, m.category_confidence, m.executive_summary, m.extracted_entities_json,
+                   m.token_count, m.word_count, m.processed_at
+            FROM documents d
+            LEFT JOIN document_metadata m ON d.id = m.document_id
+            WHERE d.id = ?
+            """, (doc_id,))
+        else:
+            cursor.execute("""
+            SELECT d.id, d.repository_id, d.original_filename, d.file_extension,
+                   d.file_size_bytes, d.mime_type, d.processing_status, d.created_at, d.raw_text,
+                   m.category, m.category_confidence, m.executive_summary, m.extracted_entities_json,
+                   m.token_count, m.word_count, m.processed_at
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            LEFT JOIN document_metadata m ON d.id = m.document_id
+            WHERE d.id = ? AND r.user_id = ?
+            """, (doc_id, current_user["user_id"]))
         r = cursor.fetchone()
         
         if not r:
@@ -231,10 +254,19 @@ def get_document_detail(doc_id: int, current_user: dict = Depends(get_current_us
 def download_document(doc_id: int, current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT stored_filename, original_filename, mime_type FROM documents WHERE id = ?", (doc_id,))
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("SELECT stored_filename, original_filename, mime_type FROM documents WHERE id = ?", (doc_id,))
+        else:
+            cursor.execute("""
+            SELECT d.stored_filename, d.original_filename, d.mime_type
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            WHERE d.id = ? AND r.user_id = ?
+            """, (doc_id, current_user["user_id"]))
         r = cursor.fetchone()
         if not r:
-            raise HTTPException(status_code=404, detail="Documento no encontrado")
+            raise HTTPException(status_code=404, detail="Documento no encontrado o sin permisos")
             
         file_path = STORAGE_DIR / r["stored_filename"]
         if not file_path.exists():
@@ -250,10 +282,19 @@ def download_document(doc_id: int, current_user: dict = Depends(get_current_user
 def delete_document(doc_id: int, current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT stored_filename, original_filename FROM documents WHERE id = ?", (doc_id,))
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("SELECT stored_filename, original_filename FROM documents WHERE id = ?", (doc_id,))
+        else:
+            cursor.execute("""
+            SELECT d.stored_filename, d.original_filename
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            WHERE d.id = ? AND r.user_id = ?
+            """, (doc_id, current_user["user_id"]))
         r = cursor.fetchone()
         if not r:
-            raise HTTPException(status_code=404, detail="Documento no encontrado")
+            raise HTTPException(status_code=404, detail="Documento no encontrado o sin permisos")
             
         # Delete from disk
         file_path = STORAGE_DIR / r["stored_filename"]
