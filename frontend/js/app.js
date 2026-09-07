@@ -344,13 +344,23 @@ class DocuMindApp {
         item.innerHTML = `
           <span>📂</span> 
           <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1;">${repo.name}</span>
-          <span style="font-size: 0.72rem; opacity: 0.7;">${repo.document_count || 0}</span>
+          <span style="font-size: 0.72rem; opacity: 0.7; margin-right: 4px;">${repo.document_count || 0}</span>
+          <button class="btn-delete-repo" title="Eliminar repositorio '${repo.name}'">🗑️</button>
         `;
         item.addEventListener('click', () => {
           this.currentRepoId = repo.id;
           this.updateRepoSelectionUI();
           this.loadDocuments();
         });
+
+        const btnDel = item.querySelector('.btn-delete-repo');
+        if (btnDel) {
+          btnDel.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.confirmAndDeleteRepository(repo.id, repo.name);
+          });
+        }
+
         container.appendChild(item);
       });
 
@@ -376,7 +386,46 @@ class DocuMindApp {
     const activeRepoName = this.currentRepoId 
       ? this.repositories.find(r => r.id === this.currentRepoId)?.name 
       : 'Todos los Repositorios';
-    document.getElementById('current-folder-title').textContent = activeRepoName;
+    const folderTitle = document.getElementById('current-folder-title');
+    if (folderTitle) folderTitle.textContent = activeRepoName;
+
+    // Toggle topbar delete button for active repository
+    const btnDeleteActive = document.getElementById('btn-delete-active-repo');
+    if (btnDeleteActive) {
+      if (this.currentRepoId !== null) {
+        btnDeleteActive.classList.remove('hidden');
+        btnDeleteActive.onclick = () => {
+          const currentRepo = this.repositories.find(r => r.id === this.currentRepoId);
+          if (currentRepo) {
+            this.confirmAndDeleteRepository(currentRepo.id, currentRepo.name);
+          }
+        };
+      } else {
+        btnDeleteActive.classList.add('hidden');
+      }
+    }
+  }
+
+  async confirmAndDeleteRepository(repoId, repoName) {
+    const confirmed = confirm(
+      `⚠️ ¿Está seguro de eliminar el repositorio "${repoName}"?\n\n` +
+      `ADVERTENCIA: Esta acción eliminará permanentemente la carpeta y todos los documentos indexados en ella.\n\n` +
+      `¿Desea continuar con la eliminación?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.deleteRepository(repoId);
+      showToast(`Repositorio "${repoName}" eliminado exitosamente`, 'success');
+      if (this.currentRepoId === repoId) {
+        this.currentRepoId = null;
+      }
+      await this.loadRepositories();
+      this.updateRepoSelectionUI();
+      await this.loadDocuments();
+    } catch (err) {
+      showToast(`Error al eliminar repositorio: ${err.message}`, 'error');
+    }
   }
 
   async promptCreateFolder() {
@@ -472,6 +521,105 @@ class DocuMindApp {
       this.renderDocumentList();
     } catch (err) {
       console.error('Error cargando documentos:', err);
+    }
+  }
+
+  async handleSearch(query) {
+    const q = (query || '').trim();
+    const btnClear = document.getElementById('btn-clear-search');
+    const catFilter = document.getElementById('search-filter-category')?.value || null;
+    const fmtFilter = document.getElementById('search-filter-format')?.value || null;
+
+    if (btnClear) {
+      btnClear.classList.toggle('hidden', q.length === 0 && !catFilter && !fmtFilter);
+    }
+
+    if (q.length < 2 && !catFilter && !fmtFilter) {
+      this.renderDocumentList();
+      return;
+    }
+
+    const grid = document.getElementById('documents-grid');
+    if (!grid) return;
+
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+        <div class="spinner" style="margin: 0 auto 0.8rem auto;"></div>
+        <div style="font-size: 0.95rem;">Buscando dentro del contenido íntegro de los documentos...</div>
+      </div>
+    `;
+
+    try {
+      const res = await api.search(q || '*', this.currentRepoId, catFilter, fmtFilter);
+      const searchResults = res.results || [];
+
+      grid.innerHTML = '';
+
+      if (searchResults.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+            <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">🔍</div>
+            <div style="font-size: 1.1rem; font-weight: 500;">No se encontraron documentos con esa coincidencia</div>
+            <p style="font-size: 0.85rem; margin-top: 0.35rem;">Intenta con otras palabras clave (ej: "cláusula", "total", "IVA", "penalidad", "Python") o elimina los filtros.</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Banner de resultados de búsqueda
+      const searchBanner = document.createElement('div');
+      searchBanner.style.cssText = 'grid-column: 1 / -1; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: var(--radius-sm); padding: 0.65rem 1rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;';
+      searchBanner.innerHTML = `
+        <span style="font-size: 0.88rem; color: var(--text-primary);">
+          🔍 Se encontraron <strong>${searchResults.length}</strong> documento(s) con coincidencias para <em>"${q || 'filtro aplicado'}"</em>
+        </span>
+        <button id="btn-exit-search" class="btn-secondary" style="font-size: 0.78rem; padding: 0.25rem 0.6rem;">Volver a vista general</button>
+      `;
+      grid.appendChild(searchBanner);
+
+      searchBanner.querySelector('#btn-exit-search').addEventListener('click', () => {
+        const sInput = document.getElementById('global-search-input');
+        if (sInput) sInput.value = '';
+        const sCat = document.getElementById('search-filter-category');
+        if (sCat) sCat.value = '';
+        const sFmt = document.getElementById('search-filter-format');
+        if (sFmt) sFmt.value = '';
+        if (btnClear) btnClear.classList.add('hidden');
+        this.renderDocumentList();
+      });
+
+      searchResults.forEach(hit => {
+        const existingDoc = this.documents.find(d => d.id === hit.document_id);
+        const doc = existingDoc ? { ...existingDoc } : {
+          id: hit.document_id,
+          original_filename: hit.document_name,
+          file_extension: hit.document_name.substring(hit.document_name.lastIndexOf('.')),
+          file_size_bytes: 0,
+          category: hit.category,
+          processing_status: 'COMPLETED',
+          created_at: 'Indexado'
+        };
+
+        // Resaltar términos encontrados dentro del snippet
+        let snippetText = hit.snippet || '';
+        if (q && q !== '*') {
+          const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`(${escapedQ})`, 'gi');
+          snippetText = snippetText.replace(regex, '<mark class="doc-match">$1</mark>');
+        }
+        doc.search_snippet = snippetText;
+        doc.relevance = hit.relevance;
+
+        const card = renderDocumentCard(
+          doc,
+          (id) => this.openDocumentDetail(id),
+          (id) => this.deleteDocument(id)
+        );
+        grid.appendChild(card);
+      });
+    } catch (err) {
+      showToast(`Error en la búsqueda: ${err.message}`, 'error');
+      this.renderDocumentList();
     }
   }
 

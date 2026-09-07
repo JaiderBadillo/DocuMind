@@ -398,6 +398,47 @@ button, input, select, textarea {
   color: var(--text-primary);
 }
 
+.repo-item .btn-delete-repo {
+  margin-left: auto;
+  opacity: 0;
+  color: var(--error);
+  font-size: 0.82rem;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.15s ease, background 0.2s ease;
+}
+
+.repo-item:hover .btn-delete-repo {
+  opacity: 0.75;
+}
+
+.repo-item .btn-delete-repo:hover {
+  opacity: 1;
+  transform: scale(1.15);
+  background: rgba(239, 68, 68, 0.18);
+}
+
+/* Resaltado de búsqueda dentro del contenido del documento */
+mark.doc-match {
+  background: #fef08a;
+  color: #854d0e;
+  border-radius: 3px;
+  padding: 1px 3px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+mark.doc-match.current {
+  background: #f59e0b !important;
+  color: #ffffff !important;
+  outline: 2px solid #d97706;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.7);
+}
+
+
 .sidebar-footer {
   padding: 1rem;
   border-top: 1px solid var(--border-color);

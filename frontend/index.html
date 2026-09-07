@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="/static/css/styles.css?v=2.1">
+  <link rel="stylesheet" href="/static/css/styles.css?v=2.2">
 </head>
 <body>
 
@@ -155,10 +155,13 @@
           <button id="btn-clear-search" class="btn-icon hidden" title="Limpiar búsqueda y filtros" style="font-size: 1rem; padding: 0.4rem 0.6rem;">✕</button>
         </div>
 
-        <div class="topbar-actions">
+        <div class="topbar-actions" style="display: flex; align-items: center; gap: 0.6rem;">
           <span id="current-folder-title" style="font-weight: 600; font-size: 0.92rem; color: var(--text-secondary);">
             Todos los Repositorios
           </span>
+          <button id="btn-delete-active-repo" class="btn-icon hidden" title="Eliminar este repositorio y sus archivos" style="color: var(--error); font-size: 0.95rem; padding: 0.3rem 0.5rem; background: rgba(239, 68, 68, 0.1); border-radius: var(--radius-sm);">
+            🗑️ Eliminar Repositorio
+          </button>
         </div>
       </header>
 
@@ -464,6 +467,6 @@
   </div>
 
   <!-- Scripts -->
-  <script type="module" src="/static/js/app.js?v=2.1"></script>
+  <script type="module" src="/static/js/app.js?v=2.2"></script>
 </body>
 </html>

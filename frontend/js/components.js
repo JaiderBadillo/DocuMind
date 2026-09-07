@@ -230,10 +230,24 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl) {
       </div>
       <div class="modal-body">
         <div class="viewer-split">
-          <!-- Columna Izquierda: Vista Previa y Datos Generales -->
+          <!-- Columna Izquierda: Vista Previa, Búsqueda de Palabras Clave y Datos Generales -->
           <div>
-            <div class="viewer-section-title">📄 Contenido Extraído</div>
-            <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius-sm); max-height: 380px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; line-height: 1.5; color: var(--text-secondary); border: 1px solid var(--border-color);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+              <div class="viewer-section-title" style="margin-bottom: 0;">📄 Contenido Extraído</div>
+              <span id="doc-search-count" style="font-size: 0.75rem; color: var(--accent-secondary); font-weight: 600;"></span>
+            </div>
+
+            <!-- Buscador dentro del documento -->
+            <div style="display: flex; gap: 0.35rem; margin-bottom: 0.5rem; align-items: center;">
+              <input type="text" id="doc-keyword-search" class="form-control" 
+                     placeholder="🔍 Buscar palabras clave dentro del texto..." 
+                     style="font-size: 0.8rem; padding: 0.35rem 0.65rem; border-radius: var(--radius-sm); flex-grow: 1;">
+              <button id="doc-search-prev" class="btn-secondary" title="Anterior coincidencia" style="padding: 0.35rem 0.55rem; font-size: 0.72rem; min-width: 28px;">▲</button>
+              <button id="doc-search-next" class="btn-secondary" title="Siguiente coincidencia" style="padding: 0.35rem 0.55rem; font-size: 0.72rem; min-width: 28px;">▼</button>
+              <button id="doc-search-clear" class="btn-icon" title="Limpiar búsqueda" style="font-size: 0.85rem; padding: 0.3rem;">✕</button>
+            </div>
+
+            <div id="doc-text-container" style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius-sm); max-height: 380px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; line-height: 1.5; color: var(--text-secondary); border: 1px solid var(--border-color);">
               ${doc.raw_text || 'Sin texto extraído.'}
             </div>
           </div>
@@ -274,6 +288,113 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl) {
       </div>
     </div>
   `;
+
+  // Interactive in-document keyword search
+  const searchInput = modal.querySelector('#doc-keyword-search');
+  const searchCount = modal.querySelector('#doc-search-count');
+  const btnPrev = modal.querySelector('#doc-search-prev');
+  const btnNext = modal.querySelector('#doc-search-next');
+  const btnClear = modal.querySelector('#doc-search-clear');
+  const textContainer = modal.querySelector('#doc-text-container');
+  const rawText = doc.raw_text || '';
+
+  let currentMatchIndex = -1;
+  let matchesCount = 0;
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function applyInDocSearch() {
+    const term = (searchInput.value || '').trim();
+    if (!term) {
+      textContainer.textContent = rawText || 'Sin texto extraído.';
+      searchCount.textContent = '';
+      currentMatchIndex = -1;
+      matchesCount = 0;
+      return;
+    }
+
+    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escapedTerm})`, 'gi');
+    const parts = rawText.split(regex);
+    
+    matchesCount = 0;
+    let newHtml = '';
+
+    parts.forEach(part => {
+      if (part.toLowerCase() === term.toLowerCase()) {
+        newHtml += `<mark class="doc-match" data-idx="${matchesCount}">${escapeHtml(part)}</mark>`;
+        matchesCount++;
+      } else {
+        newHtml += escapeHtml(part);
+      }
+    });
+
+    textContainer.innerHTML = newHtml || 'Sin coincidencias.';
+
+    if (matchesCount > 0) {
+      currentMatchIndex = 0;
+      updateActiveMatch(true);
+    } else {
+      currentMatchIndex = -1;
+      searchCount.textContent = '0 coincidencias';
+    }
+  }
+
+  function updateActiveMatch(shouldScroll = true) {
+    const marks = textContainer.querySelectorAll('mark.doc-match');
+    marks.forEach((m, idx) => {
+      if (idx === currentMatchIndex) {
+        m.classList.add('current');
+        if (shouldScroll) {
+          m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      } else {
+        m.classList.remove('current');
+      }
+    });
+    searchCount.textContent = `${currentMatchIndex + 1} de ${matchesCount} coincidencias`;
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', applyInDocSearch);
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (matchesCount > 0) {
+          currentMatchIndex = (currentMatchIndex + 1) % matchesCount;
+          updateActiveMatch(true);
+        }
+      }
+    });
+  }
+
+  if (btnNext) {
+    btnNext.addEventListener('click', () => {
+      if (matchesCount > 0) {
+        currentMatchIndex = (currentMatchIndex + 1) % matchesCount;
+        updateActiveMatch(true);
+      }
+    });
+  }
+
+  if (btnPrev) {
+    btnPrev.addEventListener('click', () => {
+      if (matchesCount > 0) {
+        currentMatchIndex = (currentMatchIndex - 1 + matchesCount) % matchesCount;
+        updateActiveMatch(true);
+      }
+    });
+  }
+
+  if (btnClear) {
+    btnClear.addEventListener('click', () => {
+      searchInput.value = '';
+      applyInDocSearch();
+      searchInput.focus();
+    });
+  }
 
   modal.querySelectorAll('.btn-close').forEach(btn => {
     btn.addEventListener('click', () => modal.remove());
