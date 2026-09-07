@@ -1,0 +1,10 @@
+FACTURA COMERCIAL NO. FC-8840
+=============================
+
+Emisor: CYBERSECURITY DEFENSE LABS | NIT: 901.888.777-3
+Cliente: BANCO DEL COMERCIO
+Fecha: 10 de Enero de 2026
+Concepto: Test de penetración (Ethical Hacking) y auditoría ISO 27001.
+Subtotal: $12.000.000 COP
+IVA (19%): $2.280.000 COP
+Total: $14.280.000 COP

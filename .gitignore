@@ -1,0 +1,43 @@
+# Ambientes virtuales de Python
+venv/
+env/
+.venv/
+ENV/
+
+# Archivos de configuración y secretos (CRÍTICO: no exponer API Keys)
+.env
+backend/.env
+*.env.local
+
+# Bytecode y cache de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Base de datos SQLite y archivos temporales
+backend/documind.db
+backend/documind.db-journal
+*.sqlite3
+*.db
+
+# Archivos subidos en tiempo de ejecución
+backend/storage/*
+!backend/storage/.gitkeep
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs y volcados
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini

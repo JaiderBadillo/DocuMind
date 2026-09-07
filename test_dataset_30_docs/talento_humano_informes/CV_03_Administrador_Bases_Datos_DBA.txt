@@ -1,0 +1,6 @@
+CURRICULUM VITAE: ROBERTO GÓMEZ PLATA
+=====================================
+
+Candidato: Roberto Gómez Plata | Profesional Senior DBA.
+Experiencia de 6 años en afinamiento, réplicas, particionamiento de tablas y seguridad de datos relacionales y no relacionales.
+Habilidades: PostgreSQL, Oracle, SQLite, MongoDB, Redis, Linux RedHat, Backup y Disaster Recovery.

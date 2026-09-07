@@ -1,0 +1,4 @@
+INFORME TÉCNICO: EVALUACIÓN DE ARQUITECTURA ZERO-TRUST
+======================================================
+
+Autor: Comité de Arquitectura Tecnológica. Resumen del Informe: Se evaluó la postura de seguridad de la infraestructura interna de la empresa. Se recomienda adoptar autenticación basada en tokens JWT con rotación obligatoria de firmas, encriptación AES-256 en reposo y políticas de mínimo privilegio.

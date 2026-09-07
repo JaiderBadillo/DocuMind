@@ -1,0 +1,4 @@
+DICTAMEN DE AUDITORÍA DE SISTEMAS DE GESTIÓN DE SEGURIDAD
+=========================================================
+
+Se verificó el cumplimiento de los controles de seguridad documental, gestión de credenciales y resguardo de variables de entorno sin exposición en repositorios públicos de Git.

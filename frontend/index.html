@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DocuMind Enterprise - Gestión Documental Inteligente con IA (UTS)</title>
+  <meta name="description" content="Solución empresarial de gestión de repositorios documentales y procesamiento con Inteligencia Artificial, RAG y búsqueda semántica para Unidades Tecnológicas de Santander (UTS).">
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/static/css/styles.css?v=2.1">
+</head>
+<body>
+
+  <!-- ================= AUTHENTICATION VIEW ================= -->
+  <section id="auth-section" class="auth-wrapper">
+    <div class="auth-box">
+      <div class="brand-header">
+        <div class="brand-logo">
+          <span>🧠</span> DocuMind Enterprise
+        </div>
+        <br>
+        <span class="brand-badge">UTS - VI Semestre | Wilson Castaño Galviz</span>
+      </div>
+
+      <div class="auth-tabs">
+        <button id="tab-login" class="auth-tab-btn active">Iniciar Sesión</button>
+        <button id="tab-register" class="auth-tab-btn">Crear Cuenta</button>
+      </div>
+
+      <!-- Formulario Login -->
+      <form id="form-login">
+        <div class="form-group">
+          <label for="login-email">Correo Electrónico Corporativo</label>
+          <input type="email" id="login-email" class="form-control" placeholder="ejemplo@documind.com" required value="admin@documind.com">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Contraseña</label>
+          <input type="password" id="login-password" class="form-control" placeholder="••••••••" required value="Admin123!">
+        </div>
+        <button type="submit" class="btn-primary">Ingresar al Sistema</button>
+      </form>
+
+      <!-- Formulario Registro -->
+      <form id="form-register" class="hidden">
+        <div class="form-group">
+          <label for="reg-name">Nombre Completo</label>
+          <input type="text" id="reg-name" class="form-control" placeholder="Ing. Carlos Pérez" required>
+        </div>
+        <div class="form-group">
+          <label for="reg-email">Correo Institucional / Corporativo</label>
+          <input type="email" id="reg-email" class="form-control" placeholder="carlos@documind.com" required>
+        </div>
+        <div class="form-group">
+          <label for="reg-password">Contraseña Segura (mín. 6 caracteres)</label>
+          <input type="password" id="reg-password" class="form-control" placeholder="••••••••" required minlength="6">
+        </div>
+        <button type="submit" class="btn-primary">Registrar Usuario</button>
+      </form>
+
+      <button id="btn-demo-login" class="btn-demo">
+        <span>⚡</span> Acceso Rápido Sustentación (Admin Demo)
+      </button>
+    </div>
+  </section>
+
+  <!-- ================= MAIN APPLICATION VIEW ================= -->
+  <section id="app-section" class="app-layout hidden">
+    <!-- Barra Lateral (Sidebar) -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-logo" style="font-size: 1.2rem;">
+          <span>🧠</span> DocuMind
+        </div>
+        <div style="display: flex; gap: 0.3rem;">
+          <button id="btn-config-ai" class="btn-icon" title="Configurar Google Gemini API Key">⚙️</button>
+          <button id="btn-toggle-theme" class="btn-icon" title="Cambiar tema día/noche">☀️</button>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-item active" data-view="docs">
+          <span>📁</span>
+          <span>Repositorio & Docs</span>
+          <span id="nav-docs-count" class="nav-item-badge">0</span>
+        </div>
+
+        <div class="nav-item" data-view="chat">
+          <span>💬</span>
+          <span>Chatbot RAG (IA)</span>
+        </div>
+
+        <div class="nav-item" data-view="notebook">
+          <span>📓</span>
+          <span>NotebookLM Studio</span>
+          <span class="nav-item-badge" style="background: linear-gradient(135deg, #4285F4, #9B72CB); color: white; font-size: 0.62rem; font-weight: 700; padding: 2px 6px;">GEMINI</span>
+        </div>
+
+        <div class="nav-item" data-view="dashboard">
+          <span>📊</span>
+          <span>Dashboard & KPIs</span>
+        </div>
+
+        <div class="sidebar-section-title">Carpetas / Repositorios</div>
+        <div id="sidebar-repos-list" class="repos-list">
+          <!-- Dynamically populated -->
+        </div>
+
+        <div style="padding: 0.5rem 0.75rem;">
+          <button id="btn-new-folder" class="btn-secondary" style="width: 100%; font-size: 0.8rem; padding: 0.45rem;">
+            + Nueva Carpeta
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile-badge">
+          <div id="user-avatar" class="avatar">A</div>
+          <div class="user-info">
+            <span id="user-display-name" class="user-name">Administrador</span>
+            <span id="user-display-role" class="user-role">ADMIN</span>
+          </div>
+        </div>
+        <button id="btn-logout" class="btn-icon" title="Cerrar Sesión" style="color: var(--error);">🚪</button>
+      </div>
+    </aside>
+
+    <!-- Contenedor Principal -->
+    <main class="main-wrapper">
+      <!-- Barra Superior (Topbar) -->
+      <header class="topbar" style="height: auto; min-height: 68px; padding: 0.75rem 1.75rem; gap: 1rem; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 0.6rem; flex-grow: 1; max-width: 860px; flex-wrap: wrap;">
+          <div class="search-box" style="flex-grow: 1; min-width: 260px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="global-search-input" class="search-input" placeholder="Buscar en contenido (ej: $18.500.000, penalidad, Python, IVA)...">
+          </div>
+          <!-- Filtro de Categoría para Búsqueda -->
+          <select id="search-filter-category" class="form-control" style="width: auto; min-width: 170px; padding: 0.45rem 0.75rem; font-size: 0.82rem; border-radius: var(--radius-full);">
+            <option value="">Todas las Categorías</option>
+            <option value="LEGAL_CONTRACTS">⚖️ Legal / Contratos</option>
+            <option value="FINANCE_INVOICES">💰 Finanzas / Facturas</option>
+            <option value="HR_PROFILES">👤 Talento Humano / CV</option>
+            <option value="TECH_REPORTS">⚙️ Informes Técnicos</option>
+          </select>
+          <!-- Filtro de Formato para Búsqueda -->
+          <select id="search-filter-format" class="form-control" style="width: auto; min-width: 140px; padding: 0.45rem 0.75rem; font-size: 0.82rem; border-radius: var(--radius-full);">
+            <option value="">Todos los Formatos</option>
+            <option value=".pdf">PDF (.pdf)</option>
+            <option value=".docx">Word (.docx)</option>
+            <option value=".txt">Texto (.txt)</option>
+          </select>
+          <button id="btn-clear-search" class="btn-icon hidden" title="Limpiar búsqueda y filtros" style="font-size: 1rem; padding: 0.4rem 0.6rem;">✕</button>
+        </div>
+
+        <div class="topbar-actions">
+          <span id="current-folder-title" style="font-weight: 600; font-size: 0.92rem; color: var(--text-secondary);">
+            Todos los Repositorios
+          </span>
+        </div>
+      </header>
+
+      <!-- Cuerpo de Contenido Dinámico -->
+      <div class="content-body">
+        
+        <!-- VISTA 1: REPOSITORIO Y DOCUMENTOS -->
+        <section id="view-docs">
+          <!-- Zona de Carga Inteligente (Drag & Drop) -->
+          <div id="upload-dropzone" class="dropzone">
+            <div class="dropzone-icon">☁️</div>
+            <div class="dropzone-title">Arrastra y suelta tus archivos aquí</div>
+            <div class="dropzone-sub">
+              Soporte nativo para <strong>PDF, DOCX y TXT</strong> (Hasta 25 MB por archivo)
+            </div>
+            <div style="margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.5rem;" onclick="event.stopPropagation();">
+              <label for="upload-repo-select" style="font-size: 0.8rem; color: var(--text-secondary);">Guardar en:</label>
+              <select id="upload-repo-select" class="form-control" style="width: auto; padding: 0.35rem 0.75rem; font-size: 0.82rem;">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+            <input type="file" id="file-upload-input" multiple accept=".pdf,.docx,.txt" class="hidden">
+          </div>
+
+          <!-- Barra de Filtros -->
+          <div class="filter-bar">
+            <div class="pills-group">
+              <button class="pill-btn pill-category active" data-category="">Todos</button>
+              <button class="pill-btn pill-category" data-category="LEGAL_CONTRACTS">⚖️ Legal / Contratos</button>
+              <button class="pill-btn pill-category" data-category="FINANCE_INVOICES">💰 Finanzas / Facturas</button>
+              <button class="pill-btn pill-category" data-category="HR_PROFILES">👤 Talento Humano</button>
+              <button class="pill-btn pill-category" data-category="TECH_REPORTS">⚙️ Informes Técnicos</button>
+            </div>
+
+            <div class="pills-group">
+              <button class="pill-btn pill-status active" data-status="">Cualquier Estado</button>
+              <button class="pill-btn pill-status" data-status="COMPLETED">Listos (IA)</button>
+              <button class="pill-btn pill-status" data-status="PROCESSING">Procesando</button>
+              <button class="pill-btn pill-status" data-status="FAILED">Fallidos</button>
+            </div>
+          </div>
+
+          <!-- Cuadrícula de Documentos -->
+          <div id="documents-grid" class="docs-grid">
+            <!-- Rendered dynamically -->
+          </div>
+        </section>
+
+        <!-- VISTA 2: ASISTENTE CONVERSACIONAL RAG -->
+        <section id="view-chat" class="hidden">
+          <div class="chat-container">
+            <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); background: var(--bg-tertiary); display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <h3 style="font-size: 1rem;">🤖 Asistente Documental RAG (Retrieval-Augmented Generation)</h3>
+                <span style="font-size: 0.78rem; color: var(--text-muted);">
+                  Pregunta sobre contratos, montos de facturas o perfiles profesionales con citas exactas.
+                </span>
+              </div>
+            </div>
+
+            <!-- Sugerencias Rápidas -->
+            <div style="padding: 0.75rem 1.5rem; display: flex; gap: 0.5rem; overflow-x: auto; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
+              <button class="pill-btn chat-suggestion-btn">"¿Cuál es el valor del contrato de software?"</button>
+              <button class="pill-btn chat-suggestion-btn">"¿Qué facturas tienen IVA del 19%?"</button>
+              <button class="pill-btn chat-suggestion-btn">"¿Quién tiene experiencia en Python y FastAPI?"</button>
+            </div>
+
+            <div id="chat-messages" class="chat-messages">
+              <div class="chat-bubble bot">
+                ¡Hola! Soy el asistente inteligente de <strong>DocuMind Enterprise</strong>. Formula cualquier pregunta sobre los archivos almacenados en tu repositorio y te responderé citando los fragmentos y documentos fuente.
+              </div>
+            </div>
+
+            <form id="chat-form" class="chat-input-area">
+              <input type="text" id="chat-input" class="form-control" placeholder="Escribe tu pregunta aquí (ej: ¿Cuáles son las fechas de vencimiento de las facturas?)..." required autocomplete="off">
+              <button type="submit" class="btn-primary" style="width: auto; padding: 0.75rem 1.5rem;">Enviar</button>
+            </form>
+          </div>
+        </section>
+
+        <!-- VISTA: NOTEBOOKLM STUDIO -->
+        <section id="view-notebook" class="hidden">
+          <div class="notebook-container">
+            <!-- Columna Izquierda: Fuentes Documentales Seleccionables -->
+            <aside class="notebook-sources-sidebar">
+              <div class="notebook-sources-header">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                  <h3 style="font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+                    <span>📚</span> Fuentes del Cuaderno
+                  </h3>
+                  <span id="notebook-selected-count-badge" class="badge-accent">0 activas</span>
+                </div>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                  Selecciona los documentos que formarán el contexto exclusivo de análisis.
+                </p>
+                <div style="display: flex; gap: 0.4rem;">
+                  <button type="button" id="btn-notebook-select-all" class="btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 0.35rem 0.5rem;">
+                    ✓ Todos
+                  </button>
+                  <button type="button" id="btn-notebook-clear-all" class="btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 0.35rem 0.5rem;">
+                    ✗ Limpiar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Lista de fuentes con scroll -->
+              <div id="notebook-sources-list" class="notebook-sources-list">
+                <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted); font-size: 0.82rem;">
+                  <span class="badge-pulse" style="width: 10px; height: 10px; display: inline-block; background: var(--accent-primary); border-radius: 50%; margin-right: 6px;"></span>
+                  Cargando fuentes del repositorio...
+                </div>
+              </div>
+
+              <div class="notebook-sources-footer">
+                <div id="notebook-tokens-info" style="font-size: 0.74rem; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between;">
+                  <span>Volumen activo:</span>
+                  <strong id="notebook-total-words-display">0 palabras</strong>
+                </div>
+              </div>
+            </aside>
+
+            <!-- Columna Derecha: Estudio & Chat Grounded -->
+            <main class="notebook-main-studio">
+              <!-- Barra superior con acciones de estudio rápidas tipo NotebookLM -->
+              <div class="notebook-studio-header">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                      <h2 style="font-size: 1.15rem; font-weight: 700;">NotebookLM Studio</h2>
+                      <span class="badge" style="background: linear-gradient(135deg, #4285F4, #9B72CB); color: white; font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 6px;">
+                        Google Gemini 1.5 Flash
+                      </span>
+                    </div>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
+                      Análisis riguroso fundamentado exclusivamente en tus fuentes seleccionadas con citas interactivas.
+                    </p>
+                  </div>
+                  <button type="button" id="btn-clear-notebook-chat" class="btn-secondary" style="font-size: 0.78rem; padding: 0.4rem 0.75rem;" title="Limpiar sesión del cuaderno">
+                    🧹 Nueva Sesión
+                  </button>
+                </div>
+
+                <!-- Chips de Acciones Rápidas de Estudio (NotebookLM Studio Guides) -->
+                <div class="notebook-action-pills">
+                  <button type="button" class="notebook-action-btn" data-mode="study_guide">
+                    <span>📑</span> Guía de Estudio
+                  </button>
+                  <button type="button" class="notebook-action-btn" data-mode="faq">
+                    <span>❓</span> Preguntas Frecuentes (FAQ)
+                  </button>
+                  <button type="button" class="notebook-action-btn" data-mode="comparison">
+                    <span>📋</span> Matriz Comparativa
+                  </button>
+                  <button type="button" class="notebook-action-btn" data-mode="briefing">
+                    <span>🎙️</span> Briefing Ejecutivo (Audio Script)
+                  </button>
+                  <button type="button" class="notebook-action-btn" data-mode="timeline">
+                    <span>⏱️</span> Cronología e Hitos
+                  </button>
+                </div>
+              </div>
+
+              <!-- Contenedor de Mensajes y Cuadernos de Respuesta -->
+              <div id="notebook-messages" class="notebook-messages-area">
+                <div class="notebook-welcome-banner">
+                  <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📓</div>
+                  <h3 style="font-size: 1.1rem; margin-bottom: 0.4rem;">Bienvenido a tu Cuaderno de Inteligencia Documental</h3>
+                  <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 580px; margin: 0 auto 1rem auto; line-height: 1.5;">
+                    Selecciona una o más fuentes en el panel izquierdo y haz una pregunta o genera guías de estudio, matrices comparativas y FAQs con respaldo exacto de citas.
+                  </p>
+                  <div style="font-size: 0.78rem; color: var(--accent-primary); display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+                    <span>⚡ Grounding Estricto</span>
+                    <span>•</span>
+                    <span>📑 Citas Interactivas</span>
+                    <span>•</span>
+                    <span>🧠 Contexto Masivo 1M Tokens</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Formulario de Entrada de Preguntas Grounded -->
+              <form id="notebook-chat-form" class="notebook-input-box">
+                <div style="display: flex; gap: 0.5rem; align-items: center; width: 100%;">
+                  <input type="text" id="notebook-query-input" class="form-control" placeholder="Haz una pregunta específica sobre las fuentes seleccionadas (ej: ¿Quién es el director o contratista?)..." required autocomplete="off">
+                  <button type="submit" id="btn-submit-notebook" class="btn-primary" style="width: auto; padding: 0.75rem 1.6rem; display: flex; align-items: center; gap: 0.4rem; white-space: nowrap;">
+                    <span>Preguntar</span> <span>➤</span>
+                  </button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: var(--text-muted); padding: 0.25rem 0.5rem 0 0.5rem;">
+                  <span id="notebook-context-status">0 fuentes seleccionadas</span>
+                  <span>Grounding 100% verificado en fuentes activas</span>
+                </div>
+              </form>
+            </main>
+          </div>
+        </section>
+
+        <!-- VISTA 3: DASHBOARD Y KPIS -->
+        <section id="view-dashboard" class="hidden">
+          <!-- Métricas Destacadas -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon">📄</div>
+              <div>
+                <div id="stat-total-docs" class="stat-val">0</div>
+                <div class="stat-label">Documentos Gestionados</div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon">📁</div>
+              <div>
+                <div id="stat-total-repos" class="stat-val">0</div>
+                <div class="stat-label">Repositorios Activos</div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon">💾</div>
+              <div>
+                <div id="stat-total-storage" class="stat-val">0 MB</div>
+                <div class="stat-label">Almacenamiento Total</div>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon">⚡</div>
+              <div>
+                <div id="stat-success-rate" class="stat-val">100%</div>
+                <div class="stat-label">Tasa de Éxito de IA</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Distribución por Categorías y Formatos -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <div class="glass-card" style="padding: 1.5rem;">
+              <h4 style="margin-bottom: 1.25rem;">Distribución por Categorías de IA</h4>
+              <div id="dashboard-categories-list">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+
+            <div class="glass-card" style="padding: 1.5rem;">
+              <h4 style="margin-bottom: 1.25rem;">Distribución por Formato de Archivo</h4>
+              <div id="dashboard-formats-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Registro de Auditoría y Logs -->
+          <div class="glass-card" style="padding: 1.5rem;">
+            <h4 style="margin-bottom: 1rem;">Historial de Procesamiento y Registro de Auditoría</h4>
+            <div style="overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="text-align: left; font-size: 0.8rem; color: var(--text-muted); border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 0.6rem;">FECHA/HORA</th>
+                    <th style="padding: 0.6rem;">ACCIÓN</th>
+                    <th style="padding: 0.6rem;">ESTADO</th>
+                    <th style="padding: 0.6rem;">DETALLES</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboard-logs-body">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </section>
+
+  <!-- Modal Configuración Gemini API Key -->
+  <div id="modal-config-ai" class="modal-overlay hidden">
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <div>
+          <h3 style="font-size: 1.1rem; margin-bottom: 0.2rem;">⚙️ Configuración del Motor de IA</h3>
+          <span style="font-size: 0.78rem; color: var(--text-muted);">Google Gemini 1.5 Flash (Opcional / Alta Precisión)</span>
+        </div>
+        <button id="btn-close-ai-modal" class="btn-icon">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.5;">
+          El sistema opera por defecto con su motor semántico local. Si deseas activar respuestas conversacionales avanzadas con <strong>Google Gemini 1.5 Flash</strong>, ingresa tu API Key gratuita obtenida en <a href="https://aistudio.google.com/" target="_blank" style="color: var(--accent-secondary); text-decoration: underline;">Google AI Studio</a>.
+        </p>
+        <div class="form-group">
+          <label for="input-gemini-key">Gemini API Key</label>
+          <input type="password" id="input-gemini-key" class="form-control" placeholder="AIzaSy...">
+        </div>
+        <div id="gemini-status-indicator" style="font-size: 0.82rem; margin-top: 0.5rem; color: var(--text-muted);">
+          Estado actual: Verificando...
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-save-gemini-key" class="btn-primary" style="width: auto;">Guardar y Activar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="/static/js/app.js?v=2.1"></script>
+</body>
+</html>

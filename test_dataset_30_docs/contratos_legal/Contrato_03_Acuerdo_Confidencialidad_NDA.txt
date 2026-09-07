@@ -1,0 +1,6 @@
+ACUERDO MUTUO DE NO DIVULGACIÓN Y CONFIDENCIALIDAD
+==================================================
+
+Las partes acuerdan proteger la información confidencial, código fuente, secretos industriales y bases de datos.
+Obligación de Reserva: Ninguna de las partes podrá divulgar sin autorización previa escrita la propiedad intelectual.
+Vigencia de la Reserva: El término de confidencialidad subsistirá por 5 años posteriores a la terminación.
