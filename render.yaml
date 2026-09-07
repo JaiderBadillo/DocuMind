@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: documind-enterprise
+    env: python
+    buildCommand: pip install -r requirements.txt && python backend/init_db.py && python backend/generate_test_docs.py && python backend/ingest_test_dataset.py
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SECRET_KEY
+        value: documind_secret_key_uts_enterprise_2026_super_secure
+      - key: GEMINI_API_KEY
+        sync: false
