@@ -3,26 +3,18 @@ from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 from .config import DATABASE_PATH
 
+_DB_INITIALIZED = False
+
 def get_db_connection():
     conn = sqlite3.connect(str(DATABASE_PATH))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
-@contextmanager
-def get_db():
+def init_database():
+    global _DB_INITIALIZED
     conn = get_db_connection()
     try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-def init_database():
-    with get_db() as conn:
         cursor = conn.cursor()
         
         # 1. Users table
@@ -107,6 +99,51 @@ def init_database():
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        
+        # Automatically seed default admin if missing
+        cursor.execute("SELECT id FROM users WHERE email = 'admin@documind.com'")
+        if not cursor.fetchone():
+            from .security import hash_password
+            pwd = hash_password("Admin123!")
+            cursor.execute(
+                "INSERT INTO users (email, full_name, password_hash, role) VALUES (?, ?, ?, ?)",
+                ("admin@documind.com", "Administrador DocuMind", pwd, "ADMIN")
+            )
+            admin_id = cursor.lastrowid
+            default_repos = [
+                ("Contratos y Acuerdos Legales", "Repositorio de minutas, contratos de prestación de servicios y confidencialidad."),
+                ("Facturación y Finanzas", "Comprobantes fiscales, facturas electrónicas y órdenes de compra."),
+                ("Talento Humano y Selección", "Hojas de vida de candidatos, perfiles de competencias y certificaciones."),
+                ("Informes Técnicos de TI", "Arquitectura de software, planes de contingencia y manuales de operaciones.")
+            ]
+            for name, desc in default_repos:
+                cursor.execute(
+                    "INSERT INTO repositories (user_id, name, description) VALUES (?, ?, ?)",
+                    (admin_id, name, desc)
+                )
+        conn.commit()
+        _DB_INITIALIZED = True
+    except Exception as e:
+        conn.rollback()
+        print(f"Error inicializando base de datos: {e}")
+    finally:
+        conn.close()
+
+@contextmanager
+def get_db():
+    global _DB_INITIALIZED
+    if not _DB_INITIALIZED:
+        init_database()
+    conn = get_db_connection()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 def log_audit(action: str, status: str, details: str = "", user_id: Optional[int] = None, document_id: Optional[int] = None):
     try:

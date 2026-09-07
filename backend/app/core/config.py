@@ -2,12 +2,23 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-STORAGE_DIR = BASE_DIR / "storage"
-DATABASE_PATH = BASE_DIR / "documind.db"
 DOCS_DIR = BASE_DIR.parent / "test_dataset_30_docs"
 
-# Ensure storage directory exists
-STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+# Detect Vercel / serverless environment (read-only filesystem except /tmp)
+IS_VERCEL = os.getenv("VERCEL") == "1" or os.getenv("AWS_LAMBDA_FUNCTION_NAME") is not None
+
+if IS_VERCEL:
+    STORAGE_DIR = Path("/tmp/storage")
+    DATABASE_PATH = Path("/tmp/documind.db")
+else:
+    STORAGE_DIR = BASE_DIR / "storage"
+    DATABASE_PATH = BASE_DIR / "documind.db"
+
+try:
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    STORAGE_DIR = Path("/tmp/storage")
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Security
 SECRET_KEY = os.getenv("SECRET_KEY", "documind_secret_key_uts_enterprise_2026_super_secure")
@@ -15,6 +26,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 8 hours
 
 ENV_FILE = BASE_DIR / ".env"
+
 
 # AI Configuration
 def get_gemini_api_key() -> str:
