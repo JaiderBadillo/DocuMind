@@ -2,7 +2,7 @@
 // DOCUMIND APP CONTROLLER - EVENT BINDINGS & VIEW STATE
 // ==========================================================================
 
-import { api } from './api.js?v=2.1';
+import { api } from './api.js?v=3.0';
 import { 
   renderDocumentCard, 
   renderDocumentModal, 
@@ -12,7 +12,7 @@ import {
   formatBytes,
   CATEGORY_NAMES,
   CATEGORY_CLASSES
-} from './components.js?v=2.1';
+} from './components.js?v=3.0';
 
 class DocuMindApp {
   constructor() {
