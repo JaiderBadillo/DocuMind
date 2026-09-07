@@ -3,9 +3,13 @@
 [![UTS](https://img.shields.io/badge/UTS-Ingenier%C3%ADa%20de%20Sistemas-blue.svg)](https://www.uts.edu.co/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)](https://www.python.org/)
+[![Video](https://img.shields.io/badge/Video-Sustentaci%C3%B3n%20Drive-red.svg)](https://drive.google.com/drive/folders/13uJyy9vPwUgFzXfjqSMjbN588gLwyrth?usp=sharing)
 [![License](https://img.shields.io/badge/Licencia-Acad%C3%A9mica-orange.svg)](#)
 
 Proyecto Integrador de la asignatura **Desarrollo de Aplicaciones Empresariales – VI Semestre**, orientado por el docente **Wilson Castaño Galviz** en las **Unidades Tecnológicas de Santander (UTS)**.
+
+> 🎥 **Video Demostrativo del Proyecto (Sustentación de 5 Minutos):**  
+> 🔗 [Ver Grabación en Google Drive](https://drive.google.com/drive/folders/13uJyy9vPwUgFzXfjqSMjbN588gLwyrth?usp=sharing)
 
 ---
 
@@ -34,16 +38,17 @@ Toda la documentación técnica exigida se encuentra detallada en la carpeta `do
 
 | Entregable | Archivo de Documentación | Descripción |
 |---|---|---|
+| **Documento Maestro** | [`DOCUMENTO_MAESTRO_PROYECTO_INTEGRADOR.md`](docs/DOCUMENTO_MAESTRO_PROYECTO_INTEGRADOR.md) | Documento unificado que articula las 5 fases completas del ciclo de desarrollo. |
 | **01 – Análisis** | [`01_Documento_de_Analisis.md`](docs/01_Documento_de_Analisis.md) | Problema, objetivos, RF01-RF12, RNF01-RNF06, reglas de negocio, Historias de Usuario (Gherkin), casos de uso y riesgos. |
 | **02 – Diseño** | [`02_Documento_de_Diseno.md`](docs/02_Documento_de_Diseno.md) | Arquitectura C4, modelo Entidad-Relación, diccionario de datos, diagramas de secuencia, API REST y seguridad. |
 | **03 – Desarrollo** | [`03_Documento_de_Desarrollo.md`](docs/03_Documento_de_Desarrollo.md) | Memoria técnica, pipeline de IA, chunking, embeddings y estructura de código. |
-| **04 – Pruebas** | [`04_Plan_y_Evidencias_de_Pruebas.md`](docs/04_Plan_y_Evidencias_de_Pruebas.md) | 12 casos de prueba documentados, trazabilidad requisito-prueba, tolerancia a fallos y defectos resueltos. |
+| **04 – Pruebas** | [`04_Plan_y_Evidencias_de_Pruebas.md`](docs/04_Plan_y_Evidencias_de_Pruebas.md) | 12 casos de prueba documentados, dataset de 30 documentos, trazabilidad y tolerancia a fallos. |
 | **05 – Despliegue** | [`05_Documento_Implementacion_Despliegue.md`](docs/05_Documento_Implementacion_Despliegue.md) | Variables de entorno, instalación paso a paso, Docker, respaldo y mantenimiento. |
 | **06 – Manual de Usuario** | [`06_Manual_de_Usuario.md`](docs/06_Manual_de_Usuario.md) | Guía ilustrada de acceso, gestión de carpetas, carga drag-and-drop y chat RAG. |
 | **07 – Manual Técnico** | [`07_Manual_Tecnico_Administracion.md`](docs/07_Manual_Tecnico_Administracion.md) | Operación de SQLite, logs de auditoría, gestión de API Keys y recuperación ante desastres. |
 | **08 – Trazabilidad** | [`08_Matriz_de_Trazabilidad.md`](docs/08_Matriz_de_Trazabilidad.md) | Matriz biunívoca: Problema $\rightarrow$ Requisitos $\rightarrow$ Código $\rightarrow$ Pruebas. |
 | **11 – Dataset 30 Docs** | `test_dataset_30_docs/` | 30 documentos sintéticos (.pdf, .docx, .txt) clasificados en 3 categorías sin datos personales reales. |
-| **13 – Sustentación y Video**| [`13_Guion_Sustentacion_y_Video.md`](docs/13_Guion_Sustentacion_y_Video.md) | Guion para video de 5 minutos y diapositivas para la defensa técnica. |
+| **13 – Sustentación y Video**| [🔗 Ver Video en Google Drive](https://drive.google.com/drive/folders/13uJyy9vPwUgFzXfjqSMjbN588gLwyrth?usp=sharing) / [`13_Guion_Sustentacion_y_Video.md`](docs/13_Guion_Sustentacion_y_Video.md) | Video oficial de sustentación (5 min) y guion técnico con diapositivas. |
 
 ---
 

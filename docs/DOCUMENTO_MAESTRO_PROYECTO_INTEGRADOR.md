@@ -8,6 +8,7 @@
   * Jaider Augusto Niño Badillo
   * Juan David Paredes Cubides
 * **Repositorio de Código Fuente:** [https://github.com/JaiderBadillo/DocuMind](https://github.com/JaiderBadillo/DocuMind)
+* **Video Demostrativo de Sustentación (5 Minutos):** [https://drive.google.com/drive/folders/13uJyy9vPwUgFzXfjqSMjbN588gLwyrth?usp=sharing](https://drive.google.com/drive/folders/13uJyy9vPwUgFzXfjqSMjbN588gLwyrth?usp=sharing)
 * **Fecha de Entrega:** Septiembre de 2026
 
 ---
