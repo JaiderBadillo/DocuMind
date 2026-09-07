@@ -62,6 +62,21 @@ class DocumentDetailResponse(DocumentResponse):
     raw_text: Optional[str] = None
     metadata: Optional[MetadataResponse] = None
 
+# ================= DOCUMENT EDIT & COPILOT SCHEMAS =================
+class DocumentUpdateRequest(BaseModel):
+    raw_text: str
+
+class DocumentAiEditRequest(BaseModel):
+    prompt: str
+    current_text: str
+    selected_text: Optional[str] = None
+
+class DocumentAiEditResponse(BaseModel):
+    reply: str
+    suggested_text: Optional[str] = None
+    mode: str = "suggestion"
+    model_used: str = "Google Gemini"
+
 # ================= SEARCH & RAG SCHEMAS =================
 class RagQueryRequest(BaseModel):
     query: str

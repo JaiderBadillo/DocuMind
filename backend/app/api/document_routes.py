@@ -8,10 +8,17 @@ from fastapi.responses import FileResponse
 
 from ..core.config import STORAGE_DIR, MAX_FILE_SIZE_BYTES, ALLOWED_EXTENSIONS
 from ..core.database import get_db, log_audit
-from ..models.schemas import DocumentResponse, DocumentDetailResponse
+from ..models.schemas import (
+    DocumentResponse, 
+    DocumentDetailResponse, 
+    DocumentUpdateRequest, 
+    DocumentAiEditRequest, 
+    DocumentAiEditResponse
+)
 from ..services.document_parser import parse_document
 from ..services.ai_engine import process_document_ai
 from ..services.vector_store import save_document_chunks
+from ..services.document_copilot import assist_document_edit
 from .auth_routes import get_current_user
 
 router = APIRouter(prefix="/documents", tags=["Documentos"])
@@ -327,3 +334,101 @@ def reprocess_document(
             
         background_tasks.add_task(execute_ai_pipeline, doc_id, file_path, r["file_extension"], current_user["user_id"])
         return {"message": f"Reprocesamiento iniciado para documento #{doc_id}"}
+
+@router.put("/{doc_id}", response_model=DocumentDetailResponse)
+def update_document_text(
+    doc_id: int,
+    req: DocumentUpdateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("SELECT id, stored_filename, file_extension, repository_id FROM documents WHERE id = ?", (doc_id,))
+        else:
+            cursor.execute("""
+            SELECT d.id, d.stored_filename, d.file_extension, d.repository_id
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            WHERE d.id = ? AND r.user_id = ?
+            """, (doc_id, current_user["user_id"]))
+        doc = cursor.fetchone()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Documento no encontrado o sin permisos")
+            
+        new_text = req.raw_text.strip()
+        word_count = len(new_text.split())
+        
+        # 1. Update text in database
+        cursor.execute(
+            "UPDATE documents SET raw_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_text, doc_id)
+        )
+        stored_filename = doc["stored_filename"]
+        file_extension = doc["file_extension"]
+
+    # 2. Update physical file if text (outside DB transaction)
+    try:
+        file_path = STORAGE_DIR / stored_filename
+        if file_extension.lower() == ".txt" and file_path.exists():
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(new_text)
+    except Exception as e:
+        print(f"Error actualizando archivo físico: {e}")
+        
+    # 3. Re-generate AI chunks & vector embeddings
+    save_document_chunks(doc_id, new_text)
+    
+    # 4. Update AI metadata summary & entities
+    ai_res = process_document_ai(new_text)
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM document_metadata WHERE document_id = ?", (doc_id,))
+        cursor.execute(
+            """
+            INSERT INTO document_metadata 
+            (document_id, category, category_confidence, executive_summary, extracted_entities_json, word_count)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                doc_id,
+                ai_res["category"],
+                ai_res["category_confidence"],
+                ai_res["executive_summary"],
+                json.dumps(ai_res["extracted_entities"]),
+                word_count
+            )
+        )
+        log_audit("DOCUMENT_EDITED", "SUCCESS", f"Documento #{doc_id} editado. {word_count} palabras.", user_id=current_user["user_id"], document_id=doc_id)
+        
+    return get_document_detail(doc_id=doc_id, current_user=current_user)
+
+@router.post("/{doc_id}/ai-edit", response_model=DocumentAiEditResponse)
+def ai_edit_document(
+    doc_id: int,
+    req: DocumentAiEditRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("SELECT raw_text FROM documents WHERE id = ?", (doc_id,))
+        else:
+            cursor.execute("""
+            SELECT d.raw_text
+            FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            WHERE d.id = ? AND r.user_id = ?
+            """, (doc_id, current_user["user_id"]))
+        doc = cursor.fetchone()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Documento no encontrado o sin permisos")
+            
+        doc_text = req.current_text if req.current_text.strip() else (doc["raw_text"] or "")
+        res = assist_document_edit(doc_text, req.prompt, req.selected_text)
+        
+        log_audit("AI_COPILOT_ASSIST", "SUCCESS", f"Copilot IA asistió documento #{doc_id}: '{req.prompt[:60]}'", user_id=current_user["user_id"], document_id=doc_id)
+        
+        return res

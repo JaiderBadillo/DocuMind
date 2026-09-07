@@ -195,8 +195,8 @@ export function renderDocumentCard(doc, onSelect, onDelete) {
   return card;
 }
 
-// Render Document Detail Modal (Split View)
-export function renderDocumentModal(doc, onReprocess, downloadUrl) {
+// Render Document Detail Modal (Word-like Editor & Gemini Copilot Studio)
+export function renderDocumentModal(doc, onReprocess, downloadUrl, onSaveText, onAiEdit) {
   const meta = doc.metadata || {};
   const entities = meta.extracted_entities || {};
   const catLabel = CATEGORY_NAMES[meta.category] || doc.category || 'Sin Clasificar';
@@ -217,20 +217,133 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl) {
     entitiesRows = '<tr><td colspan="2" style="text-align: center; color: var(--text-muted);">No se detectaron entidades específicas.</td></tr>';
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  const initialText = doc.raw_text || '';
+  const undoStack = [initialText];
+
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.innerHTML = `
-    <div class="modal-content">
+    <div class="modal-content modal-editor-xl">
+      <!-- Modal Header -->
       <div class="modal-header">
-        <div>
-          <h3 style="font-size: 1.15rem; margin-bottom: 0.2rem;">${doc.original_filename}</h3>
-          <span style="font-size: 0.8rem; color: var(--text-muted);">Tamaño: ${formatBytes(doc.file_size_bytes)} | Formato: ${doc.file_extension}</span>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div>
+            <h3 style="font-size: 1.15rem; margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span>📄</span> ${escapeHtml(doc.original_filename)}
+              <span id="unsaved-indicator" class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--error); font-size: 0.72rem; display: none;">● Cambios sin guardar</span>
+            </h3>
+            <span style="font-size: 0.78rem; color: var(--text-muted);">
+              Formato: ${doc.file_extension} | Tamaño: ${formatBytes(doc.file_size_bytes)} | Categoría: ${catLabel}
+            </span>
+          </div>
         </div>
+
+        <!-- Pestañas centrales -->
+        <div class="editor-header-tabs">
+          <button id="tab-btn-editor" class="editor-tab-btn active">
+            <span>📝</span> Editor & Copilot IA
+          </button>
+          <button id="tab-btn-analysis" class="editor-tab-btn">
+            <span>📊</span> Análisis & Entidades
+          </button>
+        </div>
+
         <button class="btn-icon btn-close" style="font-size: 1.2rem;">✕</button>
       </div>
-      <div class="modal-body">
+
+      <!-- PESTAÑA 1: Editor de Texto Word-like & Gemini Copilot -->
+      <div id="tab-content-editor" class="modal-body" style="padding: 0.75rem; height: calc(100% - 130px);">
+        <div class="editor-workspace">
+          
+          <!-- Columna Izquierda: Lienzo Word-like -->
+          <div class="editor-sheet-container">
+            <!-- Barra de Herramientas -->
+            <div class="editor-toolbar">
+              <div class="editor-tool-group">
+                <button class="editor-tool-btn" data-tool="bold" title="Negrita (**texto**)"><b>B</b></button>
+                <button class="editor-tool-btn" data-tool="italic" title="Cursiva (*texto*)"><i>I</i></button>
+                <button class="editor-tool-btn" data-tool="h1" title="Título 1 (# )">H1</button>
+                <button class="editor-tool-btn" data-tool="h2" title="Título 2 (## )">H2</button>
+                <button class="editor-tool-btn" data-tool="bullet" title="Viñeta (• )">• Lista</button>
+              </div>
+
+              <div class="editor-tool-group" style="flex-grow: 1; min-width: 140px;">
+                <input type="text" id="editor-find-input" placeholder="🔍 Buscar en documento..." 
+                       style="font-size: 0.75rem; padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); width: 100%;">
+              </div>
+
+              <div style="display: flex; gap: 0.35rem; align-items: center;">
+                <button id="btn-undo-editor" class="editor-tool-btn" title="Deshacer último cambio">↩ Deshacer</button>
+                <button id="btn-save-editor" class="btn-primary" style="padding: 0.35rem 0.85rem; font-size: 0.78rem; width: auto;">
+                  💾 Guardar
+                </button>
+              </div>
+            </div>
+
+            <!-- Paper Sheet Canvas -->
+            <div class="editor-paper-wrapper">
+              <textarea id="doc-editor-textarea" class="doc-editor-sheet" spellcheck="true" placeholder="Escribe o modifica el documento aquí...">${escapeHtml(initialText)}</textarea>
+            </div>
+
+            <!-- Statusbar -->
+            <div class="editor-statusbar">
+              <span id="editor-word-count">Palabras: 0 | Caracteres: 0</span>
+              <span id="editor-save-status" style="color: var(--text-muted); font-size: 0.74rem;">Modo de Edición Activo</span>
+            </div>
+          </div>
+
+          <!-- Columna Derecha: Asistente Copilot con Google Gemini -->
+          <div class="copilot-container">
+            <div class="copilot-header">
+              <div style="display: flex; align-items: center; gap: 0.45rem;">
+                <span style="font-size: 1.15rem;">🤖</span>
+                <div>
+                  <strong style="font-size: 0.85rem;">Gemini Copilot de Documento</strong>
+                  <div style="font-size: 0.7rem; color: var(--text-muted);">Asistente inteligente de redacción y edición</div>
+                </div>
+              </div>
+              <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: var(--accent-secondary); font-size: 0.7rem;">Google Gemini</span>
+            </div>
+
+            <!-- Sugerencias Rápidas -->
+            <div class="copilot-pills">
+              <button class="copilot-pill" data-prompt="Mejora la redacción, estilo formal y ortografía de este documento.">✍️ Mejorar redacción</button>
+              <button class="copilot-pill" data-prompt="Redacta y agrega una cláusula penal por incumplimiento del 20% con términos comerciales estándar.">⚖️ Cláusula penal</button>
+              <button class="copilot-pill" data-prompt="Redacta y agrega una cláusula de confidencialidad y reserva de información por 5 años.">🔒 Confidencialidad</button>
+              <button class="copilot-pill" data-prompt="Genera una síntesis ejecutiva estructurada en viñetas para incluir al inicio del documento.">📑 Resumen</button>
+              <button class="copilot-pill" data-prompt="Traduce este documento al inglés formal corporativo.">🌐 Traducir inglés</button>
+            </div>
+
+            <!-- Mensajes Copilot -->
+            <div id="copilot-messages" class="copilot-messages">
+              <div class="copilot-bubble bot">
+                ¡Hola! Soy tu <strong>Gemini Copilot</strong> empotrado. Puedo redactar cláusulas, mejorar la redacción, resumir o responder preguntas sobre este documento. Usa los botones rápidos o escribe abajo cualquier cambio que desees aplicar.
+              </div>
+            </div>
+
+            <!-- Input Bar -->
+            <form id="copilot-form" class="copilot-input-bar">
+              <input type="text" id="copilot-input" class="form-control" 
+                     placeholder="Pide un cambio a Gemini (ej: añade cláusula de garantía de 1 año)..." 
+                     style="font-size: 0.8rem; padding: 0.45rem 0.75rem; border-radius: 6px;" required autocomplete="off">
+              <button type="submit" class="btn-primary" style="width: auto; padding: 0.45rem 0.9rem; font-size: 0.8rem;">
+                Enviar
+              </button>
+            </form>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- PESTAÑA 2: Análisis de IA & Entidades Estructuradas (Vista clásica) -->
+      <div id="tab-content-analysis" class="modal-body hidden" style="padding: 1.25rem;">
         <div class="viewer-split">
-          <!-- Columna Izquierda: Vista Previa, Búsqueda de Palabras Clave y Datos Generales -->
+          <!-- Columna Izquierda: Vista Previa y Búsqueda -->
           <div>
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
               <div class="viewer-section-title" style="margin-bottom: 0;">📄 Contenido Extraído</div>
@@ -247,12 +360,12 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl) {
               <button id="doc-search-clear" class="btn-icon" title="Limpiar búsqueda" style="font-size: 0.85rem; padding: 0.3rem;">✕</button>
             </div>
 
-            <div id="doc-text-container" style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius-sm); max-height: 380px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; line-height: 1.5; color: var(--text-secondary); border: 1px solid var(--border-color);">
-              ${doc.raw_text || 'Sin texto extraído.'}
+            <div id="doc-text-container" style="background: var(--bg-tertiary); padding: 1rem; border-radius: var(--radius-sm); max-height: 480px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; line-height: 1.5; color: var(--text-secondary); border: 1px solid var(--border-color);">
+              ${escapeHtml(initialText)}
             </div>
           </div>
 
-          <!-- Columna Derecha: Inteligencia Artificial y Entidades -->
+          <!-- Columna Derecha: Análisis de IA -->
           <div>
             <div class="viewer-section-title">🤖 Análisis de Inteligencia Artificial</div>
             
@@ -260,12 +373,12 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl) {
               <span class="cat-tag ${catClass}" style="font-size: 0.85rem; padding: 0.35rem 0.85rem;">
                 ${catLabel} (${Math.round((meta.category_confidence || 0.95) * 100)}% Confianza)
               </span>
-              <span style="font-size: 0.78rem; color: var(--text-muted);">${meta.word_count || 0} palabras analizadas</span>
+              <span id="analysis-word-count-badge" style="font-size: 0.78rem; color: var(--text-muted);">${meta.word_count || 0} palabras analizadas</span>
             </div>
 
             <div style="margin-bottom: 1.25rem;">
               <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">Resumen Ejecutivo:</div>
-              <div style="background: rgba(99, 102, 241, 0.06); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: var(--radius-sm); padding: 0.85rem; font-size: 0.85rem; line-height: 1.6;">
+              <div id="analysis-summary-box" style="background: rgba(99, 102, 241, 0.06); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: var(--radius-sm); padding: 0.85rem; font-size: 0.85rem; line-height: 1.6;">
                 ${renderMarkdown(meta.executive_summary || 'Generando síntesis con IA...')}
               </div>
             </div>
@@ -281,6 +394,8 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl) {
           </div>
         </div>
       </div>
+
+      <!-- Modal Footer -->
       <div class="modal-footer">
         <a href="${downloadUrl}" target="_blank" class="btn-secondary" style="display: inline-flex; align-items: center; gap: 0.4rem;">📥 Descargar Original</a>
         <button class="btn-secondary btn-reprocess">🔄 Reprocesar con IA</button>
@@ -289,24 +404,296 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl) {
     </div>
   `;
 
-  // Interactive in-document keyword search
+  // --- Element References ---
+  const tabBtnEditor = modal.querySelector('#tab-btn-editor');
+  const tabBtnAnalysis = modal.querySelector('#tab-btn-analysis');
+  const tabContentEditor = modal.querySelector('#tab-content-editor');
+  const tabContentAnalysis = modal.querySelector('#tab-content-analysis');
+
+  const textarea = modal.querySelector('#doc-editor-textarea');
+  const wordCountSpan = modal.querySelector('#editor-word-count');
+  const unsavedIndicator = modal.querySelector('#unsaved-indicator');
+  const btnSaveEditor = modal.querySelector('#btn-save-editor');
+  const btnUndoEditor = modal.querySelector('#btn-undo-editor');
+  const editorFindInput = modal.querySelector('#editor-find-input');
+  const editorSaveStatus = modal.querySelector('#editor-save-status');
+
+  const copilotMessages = modal.querySelector('#copilot-messages');
+  const copilotForm = modal.querySelector('#copilot-form');
+  const copilotInput = modal.querySelector('#copilot-input');
+  const copilotPills = modal.querySelectorAll('.copilot-pill');
+
+  let hasUnsavedChanges = false;
+
+  // --- Tab Switching ---
+  tabBtnEditor.addEventListener('click', () => {
+    tabBtnEditor.classList.add('active');
+    tabBtnAnalysis.classList.remove('active');
+    tabContentEditor.classList.remove('hidden');
+    tabContentAnalysis.classList.add('hidden');
+  });
+
+  tabBtnAnalysis.addEventListener('click', () => {
+    tabBtnAnalysis.classList.add('active');
+    tabBtnEditor.classList.remove('active');
+    tabContentAnalysis.classList.remove('hidden');
+    tabContentEditor.classList.add('hidden');
+    // Update preview container with current textarea value
+    const previewContainer = modal.querySelector('#doc-text-container');
+    if (previewContainer) {
+      previewContainer.textContent = textarea.value;
+    }
+  });
+
+  // --- Word / Char Counting ---
+  function updateCounters() {
+    const text = textarea.value;
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const chars = text.length;
+    wordCountSpan.textContent = `Palabras: ${words} | Caracteres: ${chars}`;
+  }
+  updateCounters();
+
+  // --- Editor Input Listener ---
+  textarea.addEventListener('input', () => {
+    hasUnsavedChanges = true;
+    unsavedIndicator.style.display = 'inline-flex';
+    editorSaveStatus.textContent = '● Cambios sin guardar';
+    editorSaveStatus.style.color = 'var(--warning)';
+    updateCounters();
+  });
+
+  // --- Toolbar Actions ---
+  modal.querySelectorAll('.editor-tool-btn[data-tool]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tool = btn.getAttribute('data-tool');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const val = textarea.value;
+      const selected = val.substring(start, end);
+
+      let replacement = '';
+      if (tool === 'bold') {
+        replacement = selected ? `**${selected}**` : `**texto en negrita**`;
+      } else if (tool === 'italic') {
+        replacement = selected ? `*${selected}*` : `*texto en cursiva*`;
+      } else if (tool === 'h1') {
+        replacement = `\n# ${selected || 'Título Principal'}\n`;
+      } else if (tool === 'h2') {
+        replacement = `\n## ${selected || 'Subtítulo'}\n`;
+      } else if (tool === 'bullet') {
+        replacement = `\n• ${selected || 'Elemento de lista'}\n`;
+      }
+
+      undoStack.push(val);
+      textarea.value = val.substring(0, start) + replacement + val.substring(end);
+      textarea.dispatchEvent(new Event('input'));
+      textarea.focus();
+      textarea.setSelectionRange(start, start + replacement.length);
+    });
+  });
+
+  // --- Undo Action ---
+  if (btnUndoEditor) {
+    btnUndoEditor.addEventListener('click', () => {
+      if (undoStack.length > 0) {
+        const prev = undoStack.pop();
+        textarea.value = prev;
+        textarea.dispatchEvent(new Event('input'));
+      }
+    });
+  }
+
+  // --- Find in Editor ---
+  if (editorFindInput) {
+    editorFindInput.addEventListener('input', () => {
+      const query = editorFindInput.value.trim().toLowerCase();
+      if (!query) return;
+      const idx = textarea.value.toLowerCase().indexOf(query);
+      if (idx !== -1) {
+        textarea.focus();
+        textarea.setSelectionRange(idx, idx + query.length);
+      }
+    });
+  }
+
+  // --- Save Changes to Backend ---
+  if (btnSaveEditor) {
+    btnSaveEditor.addEventListener('click', async () => {
+      const newText = textarea.value;
+      btnSaveEditor.disabled = true;
+      btnSaveEditor.textContent = '⏳ Guardando...';
+      try {
+        if (typeof onSaveText === 'function') {
+          const updated = await onSaveText(doc.id, newText);
+          hasUnsavedChanges = false;
+          unsavedIndicator.style.display = 'none';
+          editorSaveStatus.textContent = '✓ Guardado y re-indexado con éxito';
+          editorSaveStatus.style.color = 'var(--success)';
+          btnSaveEditor.textContent = '✓ Guardado';
+          
+          // Update analysis tab if new metadata arrived
+          if (updated && updated.metadata) {
+            const summaryBox = modal.querySelector('#analysis-summary-box');
+            if (summaryBox && updated.metadata.executive_summary) {
+              summaryBox.innerHTML = renderMarkdown(updated.metadata.executive_summary);
+            }
+            const wordBadge = modal.querySelector('#analysis-word-count-badge');
+            if (wordBadge) {
+              wordBadge.textContent = `${updated.metadata.word_count || 0} palabras analizadas`;
+            }
+          }
+          
+          setTimeout(() => {
+            btnSaveEditor.disabled = false;
+            btnSaveEditor.textContent = '💾 Guardar';
+          }, 1800);
+        }
+      } catch (err) {
+        editorSaveStatus.textContent = `Error: ${err.message}`;
+        editorSaveStatus.style.color = 'var(--error)';
+        btnSaveEditor.disabled = false;
+        btnSaveEditor.textContent = '💾 Guardar';
+      }
+    });
+  }
+
+  // --- Copilot Assistance ---
+  async function sendCopilotPrompt(promptText) {
+    if (!promptText.trim()) return;
+
+    // Get optional user selection
+    const selStart = textarea.selectionStart;
+    const selEnd = textarea.selectionEnd;
+    const selectedText = (selStart !== selEnd) ? textarea.value.substring(selStart, selEnd) : null;
+
+    // Append User message
+    const userBubble = document.createElement('div');
+    userBubble.className = 'copilot-bubble user';
+    userBubble.textContent = promptText;
+    copilotMessages.appendChild(userBubble);
+    copilotMessages.scrollTop = copilotMessages.scrollHeight;
+
+    // Append Bot Loading message
+    const loadingBubble = document.createElement('div');
+    loadingBubble.className = 'copilot-bubble bot';
+    loadingBubble.innerHTML = `<span>Analizando documento y redactando con Gemini Copilot... 🔍</span>`;
+    copilotMessages.appendChild(loadingBubble);
+    copilotMessages.scrollTop = copilotMessages.scrollHeight;
+
+    try {
+      if (typeof onAiEdit === 'function') {
+        const res = await onAiEdit(doc.id, promptText, textarea.value, selectedText);
+        loadingBubble.remove();
+
+        const botBubble = document.createElement('div');
+        botBubble.className = 'copilot-bubble bot';
+
+        let proposalHtml = '';
+        if (res.suggested_text) {
+          proposalHtml = `
+            <div class="copilot-proposal-box">
+              <div style="font-size: 0.74rem; font-weight: 700; color: var(--accent-primary); margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.3rem;">
+                <span>✨</span> Propuesta de Modificación para el Documento:
+              </div>
+              <div class="copilot-proposal-text">${escapeHtml(res.suggested_text)}</div>
+              <div class="copilot-proposal-actions">
+                <button type="button" class="btn-secondary btn-copy-proposal" style="padding: 0.3rem 0.6rem; font-size: 0.72rem;">📋 Copiar</button>
+                <button type="button" class="btn-primary btn-apply-proposal" style="padding: 0.3rem 0.75rem; font-size: 0.74rem;">⚡ Aplicar al Documento</button>
+              </div>
+            </div>
+          `;
+        }
+
+        botBubble.innerHTML = `
+          <div>${renderMarkdown(res.reply || 'He procesado tu solicitud.')}</div>
+          ${proposalHtml}
+          <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 0.4rem; text-align: right;">
+            ${res.model_used || 'Google Gemini Copilot'}
+          </div>
+        `;
+
+        // Apply Proposal Button Handler
+        const btnApply = botBubble.querySelector('.btn-apply-proposal');
+        if (btnApply && res.suggested_text) {
+          btnApply.addEventListener('click', () => {
+            undoStack.push(textarea.value);
+            const currentVal = textarea.value;
+            const startPos = textarea.selectionStart;
+            const endPos = textarea.selectionEnd;
+
+            if (startPos !== endPos) {
+              // Replace selected text
+              textarea.value = currentVal.substring(0, startPos) + res.suggested_text + currentVal.substring(endPos);
+            } else {
+              // Append with clean paragraph break
+              textarea.value = currentVal.trim() + '\n\n' + res.suggested_text;
+            }
+
+            textarea.dispatchEvent(new Event('input'));
+            btnApply.textContent = '✓ Aplicado';
+            btnApply.disabled = true;
+            btnApply.style.background = 'var(--success)';
+            
+            // Switch to editor tab if not visible
+            tabBtnEditor.click();
+            textarea.focus();
+          });
+        }
+
+        // Copy Proposal Button Handler
+        const btnCopy = botBubble.querySelector('.btn-copy-proposal');
+        if (btnCopy && res.suggested_text) {
+          btnCopy.addEventListener('click', () => {
+            navigator.clipboard.writeText(res.suggested_text);
+            btnCopy.textContent = '✓ Copiado';
+            setTimeout(() => { btnCopy.textContent = '📋 Copiar'; }, 1500);
+          });
+        }
+
+        copilotMessages.appendChild(botBubble);
+        copilotMessages.scrollTop = copilotMessages.scrollHeight;
+      }
+    } catch (err) {
+      loadingBubble.innerHTML = `<span style="color: var(--error);">Error en Copilot: ${escapeHtml(err.message)}</span>`;
+    }
+  }
+
+  // --- Copilot Form Submit ---
+  if (copilotForm) {
+    copilotForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const prompt = copilotInput.value.trim();
+      if (!prompt) return;
+      copilotInput.value = '';
+      sendCopilotPrompt(prompt);
+    });
+  }
+
+  // --- Copilot Quick Pills ---
+  copilotPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      const prompt = pill.getAttribute('data-prompt');
+      if (prompt) {
+        sendCopilotPrompt(prompt);
+      }
+    });
+  });
+
+  // --- In-Document Keyword Search in Analysis Tab ---
   const searchInput = modal.querySelector('#doc-keyword-search');
   const searchCount = modal.querySelector('#doc-search-count');
   const btnPrev = modal.querySelector('#doc-search-prev');
   const btnNext = modal.querySelector('#doc-search-next');
   const btnClear = modal.querySelector('#doc-search-clear');
   const textContainer = modal.querySelector('#doc-text-container');
-  const rawText = doc.raw_text || '';
 
   let currentMatchIndex = -1;
   let matchesCount = 0;
 
-  function escapeHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
   function applyInDocSearch() {
     const term = (searchInput.value || '').trim();
+    const rawText = textarea.value || '';
     if (!term) {
       textContainer.textContent = rawText || 'Sin texto extraído.';
       searchCount.textContent = '';
@@ -396,8 +783,15 @@ export function renderDocumentModal(doc, onReprocess, downloadUrl) {
     });
   }
 
+  // Close Modal
   modal.querySelectorAll('.btn-close').forEach(btn => {
-    btn.addEventListener('click', () => modal.remove());
+    btn.addEventListener('click', () => {
+      if (hasUnsavedChanges) {
+        const confirmClose = confirm('Tiene cambios sin guardar en el documento. ¿Desea cerrar de todos modos?');
+        if (!confirmClose) return;
+      }
+      modal.remove();
+    });
   });
 
   modal.querySelector('.btn-reprocess').addEventListener('click', () => {

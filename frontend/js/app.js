@@ -688,7 +688,16 @@ class DocuMindApp {
       const modal = renderDocumentModal(
         doc, 
         (id) => this.reprocessDocument(id),
-        downloadUrl
+        downloadUrl,
+        async (id, newText) => {
+          const updated = await api.updateDocumentText(id, newText);
+          showToast('Documento guardado y re-indexado exitosamente', 'success');
+          await this.loadDocuments();
+          return updated;
+        },
+        async (id, prompt, currentText, selectedText) => {
+          return await api.aiEditDocument(id, prompt, currentText, selectedText);
+        }
       );
       document.body.appendChild(modal);
     } catch (err) {

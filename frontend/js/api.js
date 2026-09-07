@@ -167,6 +167,24 @@ class ApiClient {
     return `${API_BASE}/documents/${docId}/download`;
   }
 
+  async updateDocumentText(docId, rawText) {
+    return await this.request(`/documents/${docId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ raw_text: rawText })
+    });
+  }
+
+  async aiEditDocument(docId, prompt, currentText = '', selectedText = null) {
+    return await this.request(`/documents/${docId}/ai-edit`, {
+      method: 'POST',
+      body: JSON.stringify({
+        prompt: prompt,
+        current_text: currentText,
+        selected_text: selectedText
+      })
+    });
+  }
+
   // --- Search & RAG ---
   async search(query, repositoryId = null, category = null, format = null) {
     const qs = new URLSearchParams({ q: query });
