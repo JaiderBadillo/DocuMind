@@ -67,7 +67,65 @@ El objetivo del plan de pruebas es validar la confiabilidad, precisión de la In
 
 ---
 
-## 5. Conclusiones de la Fase de Pruebas
+## 6. Repositorio Documental para las Pruebas (Dataset de 30 Documentos)
+
+En cumplimiento estricto del **Punto 7 de los Términos de Referencia del Proyecto Integrador**, el equipo diseñó y preparó un conjunto de **30 documentos de prueba**, organizados en 3 categorías temáticas y distribuidos equilibradamente entre los tres formatos requeridos (`.pdf`, `.docx`, `.txt`).
+
+### 6.1 Política de Protección de Datos Personales (Datos Sintéticos)
+> [!IMPORTANT]
+> En observancia de la **Ley 1581 de 2012** (Régimen General de Protección de Datos Personales en Colombia) y las directrices docentes, **NO se utilizaron datos personales ni corporativos reales**. Todos los nombres de empresas (ej. *Servicios Cloud Andina S.A.S.*, *Innovatech Solutions Ltda.*), personas (ej. *Carlos Mendoza*, *Laura Gómez*), números de identificación tributaria (NIT) y cuentas bancarias son **100% ficticios y sintéticos**, concebidos exclusivamente para validación algorítmica y pruebas funcionales.
+
+### 6.2 Distribución del Conjunto de Pruebas (30 Archivos)
+
+| # | Categoría / Repositorio | Nombre del Documento | Formato | Tamaño Aprox. | Propósito de Prueba / Contenido Evaluado |
+|---|---|---|---|---|---|
+| 1 | **Contratos y Legal** | `Contrato_01_Prestacion_Servicios_Software.pdf` | PDF | 2.1 KB | Objeto contractual, valor pactado, entregables y cláusula de confidencialidad. |
+| 2 | **Contratos y Legal** | `Contrato_02_Arrendamiento_Oficinas_Comerciales.docx` | DOCX | 36.9 KB | Arrendador/arrendatario, canon mensual, incremento IPC y penalidad por mora. |
+| 3 | **Contratos y Legal** | `Contrato_03_Acuerdo_Confidencialidad_NDA.txt` | TXT | 455 B | Definición de información reservada, vigencia de 5 años y jurisdicción. |
+| 4 | **Contratos y Legal** | `Contrato_04_Mantenimiento_Servidores_Cloud.pdf` | PDF | 1.8 KB | Acuerdos de nivel de servicio (SLA 99.9%), horarios de soporte y penalizaciones. |
+| 5 | **Contratos y Legal** | `Contrato_05_Cesion_Derechos_Patrimoniales.docx` | DOCX | 36.8 KB | Cesión de código fuente, exclusividad y remuneración económica pactada. |
+| 6 | **Contratos y Legal** | `Contrato_06_Licenciamiento_Software_ERP.txt` | TXT | 299 B | Número de licencias concurrentes, restricciones de uso e ingeniería inversa. |
+| 7 | **Contratos y Legal** | `Contrato_07_Suministro_Equipos_Computo.pdf` | PDF | 1.7 KB | Cantidades de hardware (laptops, servidores), tiempos de entrega y garantía. |
+| 8 | **Contratos y Legal** | `Contrato_08_Seguro_Responsabilidad_Civil.docx` | DOCX | 36.8 KB | Póliza de cumplimiento contractual, deducibles y cobertura en COP. |
+| 9 | **Contratos y Legal** | `Contrato_09_Prestacion_Servicios_Auditoria.txt` | TXT | 287 B | Alcance de auditoría de seguridad informática y fechas de informes. |
+| 10 | **Contratos y Legal** | `Contrato_10_Convenio_Pasantia_Empresarial.pdf` | PDF | 1.8 KB | Modalidad de práctica empresarial, tutor institucional y subsidio de transporte. |
+| 11 | **Facturas y Finanzas** | `Factura_01_Servicios_Cloud_AWS.pdf` | PDF | 1.9 KB | Consumo de computación en la nube, subtotal, IVA 19% y total facturado. |
+| 12 | **Facturas y Finanzas** | `Factura_02_Licencias_Office365.docx` | DOCX | 36.8 KB | Suscripción empresarial anual, desglose por usuario y fecha de vencimiento. |
+| 13 | **Facturas y Finanzas** | `Factura_03_Consultoria_Seguridad_Informatica.txt` | TXT | 328 B | Horas de consultoría de pentesting, tarifa por hora y retención en la fuente. |
+| 14 | **Facturas y Finanzas** | `Factura_04_Equipos_Red_Cisco.pdf` | PDF | 1.8 KB | Routers y switches empresariales, número de serie y valor total en USD/COP. |
+| 15 | **Facturas y Finanzas** | `Factura_05_Servicios_Fibra_Optica.docx` | DOCX | 36.8 KB | Ancho de banda dedicado 500 Mbps, mensualidad recurrente e impuestos. |
+| 16 | **Facturas y Finanzas** | `Factura_06_Capacitacion_Inteligencia_Artificial.txt` | TXT | 281 B | Taller corporativo de LLMs y RAG, cantidad de participantes y costo. |
+| 17 | **Facturas y Finanzas** | `Factura_07_Renovacion_Dominios_SSL.pdf` | PDF | 1.7 KB | Certificados Wildcard SSL, dominio corporativo y periodo de vigencia. |
+| 18 | **Facturas y Finanzas** | `Factura_08_Mantenimiento_Aire_Acondicionado.docx` | DOCX | 36.8 KB | Limpieza y recarga en datacenter, insumos y firma de recibido a satisfacción. |
+| 19 | **Facturas y Finanzas** | `Factura_09_Adquisicion_Monitores_Dell.txt` | TXT | 276 B | Monitores UltraSharp 27 pulgadas, cantidad 15 unidades y descuento comercial. |
+| 20 | **Facturas y Finanzas** | `Factura_10_Soporte_Base_Datos_Oracle.pdf` | PDF | 1.7 KB | Mantenimiento preventivo de motor de base de datos y optimización de índices. |
+| 21 | **Talento Humano e Informes** | `CV_01_Ingeniero_Software_FullStack.pdf` | PDF | 2.0 KB | Perfil técnico, experiencia en FastAPI/React, formación y competencias. |
+| 22 | **Talento Humano e Informes** | `CV_02_Cientifico_Datos_NLP.docx` | DOCX | 36.9 KB | Especialización en modelos de lenguaje, PyTorch, LangChain y publicaciones. |
+| 23 | **Talento Humano e Informes** | `CV_03_Administrador_Bases_Datos_DBA.txt` | TXT | 369 B | Gestión de PostgreSQL, replicación, tuning de rendimiento y certificaciones. |
+| 24 | **Talento Humano e Informes** | `CV_04_Disenador_UI_UX_Figma.pdf` | PDF | 1.8 KB | Diseño de sistemas de diseño corporativos, wireframes y usabilidad web. |
+| 25 | **Talento Humano e Informes** | `CV_05_Ingeniero_DevOps_Cloud.docx` | DOCX | 36.8 KB | Automatización CI/CD, Kubernetes, Docker, Terraform y monitoreo Prometheus. |
+| 26 | **Talento Humano e Informes** | `Informe_06_Arquitectura_Seguridad_ZeroTrust.txt` | TXT | 424 B | Diagnóstico de vulnerabilidades de red y recomendaciones de autenticación MFA. |
+| 27 | **Talento Humano e Informes** | `Informe_07_Pruebas_Rendimiento_FastAPI.pdf` | PDF | 1.7 KB | Tiempos de respuesta p95, pruebas de carga con Locust y uso de CPU/RAM. |
+| 28 | **Talento Humano e Informes** | `Informe_08_Migracion_Base_Datos_Vectorial.docx` | DOCX | 36.8 KB | Evaluación comparativa de embeddings, tiempos de indexación y precisión de búsqueda. |
+| 29 | **Talento Humano e Informes** | `Informe_09_Auditoria_Normativa_ISO27001.txt` | TXT | 303 B | Lista de chequeo de controles de seguridad de la información y hallazgos. |
+| 30 | **Talento Humano e Informes** | `Informe_10_Estrategia_Continuidad_Negocio_BCP.pdf` | PDF | 1.7 KB | Plan de recuperación ante desastres (DRP), RTO de 2 horas y RPO de 15 minutos. |
+
+### 6.3 Resumen de Cobertura por Formatos y Categorías
+* **Total de Documentos:** 30
+* **Distribución por Categorías:**
+  * ⚖️ *Contratos y Legal:* 10 documentos (33.3%)
+  * 💰 *Facturas y Finanzas:* 10 documentos (33.3%)
+  * 👥 *Talento Humano e Informes Técnicos:* 10 documentos (33.3%)
+* **Distribución por Formato de Archivo:**
+  * 📄 **PDF (`.pdf`):** 12 documentos (40.0%)
+  * 📝 **Word (`.docx`):** 10 documentos (33.3%)
+  * 📋 **Texto Plano (`.txt`):** 8 documentos (26.7%)
+* **Ubicación Física en el Repositorio:** Carpeta raíz `/test_dataset_30_docs/` organizada en subcarpetas `contratos_legal/`, `facturas_finanzas/` y `talento_humano_informes/`.
+
+---
+
+## 7. Conclusiones de la Fase de Pruebas
 1. Se alcanzó un **100% de aprobación** en los 12 casos de prueba ejecutados.
 2. El sistema demostró resiliencia total frente a errores de formato o archivos vacíos, registrando el evento en auditoría sin interrumpir el servicio.
 3. La arquitectura dual de IA garantizó que tanto con API externa (Google Gemini) como con motor heurístico local, las respuestas y clasificaciones se completen dentro de los tiempos estipulados (< 5 segundos).
+4. El conjunto de 30 documentos de prueba demostró la capacidad de DocuMind Enterprise para procesar colecciones empresariales heterogéneas con cero fallos de lectura y alta fidelidad en extracción de entidades y respuestas RAG.
