@@ -1065,8 +1065,10 @@ class DocuMindApp {
     container.innerHTML = '';
     if (this.notebookSources.length === 0) {
       container.innerHTML = `
-        <div style="text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.8rem;">
-          No hay documentos procesados en este repositorio.<br>Sube archivos primero.
+        <div style="text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.85rem; line-height: 1.5;">
+          <i class="fa-solid fa-folder-open" style="font-size: 1.8rem; margin-bottom: 0.6rem; opacity: 0.5;"></i><br>
+          No tienes documentos procesados en tu cuenta.<br>
+          <span style="font-size: 0.75rem; opacity: 0.8;">Sube archivos a tus carpetas para comenzar a usar NotebookLM Studio.</span>
         </div>
       `;
       this.updateNotebookContextStats();

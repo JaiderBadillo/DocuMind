@@ -13,8 +13,11 @@ def get_notebook_sources(
     repository_id: Optional[int] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Returns all ready documents formatted as selectable sources for the Notebook Studio."""
+    """Returns all ready documents formatted as selectable sources for the Notebook Studio, strictly scoped to current user."""
     sources = []
+    is_admin = current_user.get("role") == "ADMIN"
+    user_id = current_user.get("user_id")
+
     with get_db() as conn:
         sql = """
         SELECT d.id, d.original_filename, d.file_extension,
@@ -22,10 +25,15 @@ def get_notebook_sources(
                COALESCE(m.word_count, 0) as word_count,
                COALESCE(m.executive_summary, SUBSTR(d.raw_text, 1, 150)) as summary
         FROM documents d
+        JOIN repositories r ON d.repository_id = r.id
         LEFT JOIN document_metadata m ON d.id = m.document_id
         WHERE d.processing_status = 'COMPLETED'
         """
         params = []
+        if not is_admin:
+            sql += " AND r.user_id = ?"
+            params.append(user_id)
+
         if repository_id:
             sql += " AND d.repository_id = ?"
             params.append(repository_id)
@@ -198,9 +206,12 @@ def notebook_chat_query(
     if not request.query.strip() and request.mode == "chat":
         raise HTTPException(status_code=400, detail="La consulta no puede estar vacía.")
 
-    # Retrieve full document contents
+    # Retrieve full document contents strictly scoped to current user
     docs_data = []
     total_words = 0
+    is_admin = current_user.get("role") == "ADMIN"
+    user_id = current_user.get("user_id")
+
     with get_db() as conn:
         placeholders = ",".join(["?"] * len(request.document_ids))
         sql = f"""
@@ -208,11 +219,17 @@ def notebook_chat_query(
                COALESCE(m.category, 'General') as category,
                COALESCE(m.executive_summary, '') as summary
         FROM documents d
+        JOIN repositories r ON d.repository_id = r.id
         LEFT JOIN document_metadata m ON d.id = m.document_id
         WHERE d.id IN ({placeholders}) AND d.processing_status = 'COMPLETED'
         """
+        params = list(request.document_ids)
+        if not is_admin:
+            sql += " AND r.user_id = ?"
+            params.append(user_id)
+
         cursor = conn.cursor()
-        cursor.execute(sql, tuple(request.document_ids))
+        cursor.execute(sql, tuple(params))
         rows = cursor.fetchall()
         
         for r in rows:

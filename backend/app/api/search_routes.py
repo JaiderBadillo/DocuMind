@@ -19,12 +19,16 @@ def search_documents(
     if ext and not ext.startswith("."):
         ext = f".{ext}"
         
+    is_admin = current_user.get("role") == "ADMIN"
+    user_id = None if is_admin else current_user["user_id"]
+        
     results_raw = hybrid_search_documents(
         query=q,
         repository_id=repository_id,
         category=category,
         file_extension=ext,
-        top_k=20
+        top_k=20,
+        user_id=user_id
     )
     
     results = [
@@ -51,7 +55,10 @@ def rag_chat(request: RagQueryRequest, current_user: dict = Depends(get_current_
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="La consulta no puede estar vacía")
         
-    answer_data = answer_rag_query(request.query, repository_id=request.repository_id)
+    is_admin = current_user.get("role") == "ADMIN"
+    user_id = None if is_admin else current_user["user_id"]
+        
+    answer_data = answer_rag_query(request.query, repository_id=request.repository_id, user_id=user_id)
     log_audit("RAG_QUERY", "SUCCESS", f"Consulta RAG: '{request.query[:80]}'", user_id=current_user["user_id"])
     
     return answer_data

@@ -110,12 +110,22 @@ def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
 def get_audit_logs(limit: int = 20, current_user: dict = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-        SELECT id, action, status, details, timestamp
-        FROM audit_logs
-        ORDER BY timestamp DESC
-        LIMIT ?
-        """, (limit,))
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("""
+            SELECT id, action, status, details, timestamp
+            FROM audit_logs
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """, (limit,))
+        else:
+            cursor.execute("""
+            SELECT id, action, status, details, timestamp
+            FROM audit_logs
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """, (current_user["user_id"], limit))
         rows = cursor.fetchall()
         return [
             {

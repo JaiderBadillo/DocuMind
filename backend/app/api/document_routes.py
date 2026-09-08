@@ -434,6 +434,20 @@ async def upload_document_image(
     image: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        is_admin = current_user.get("role") == "ADMIN"
+        if is_admin:
+            cursor.execute("SELECT id FROM documents WHERE id = ?", (doc_id,))
+        else:
+            cursor.execute("""
+            SELECT d.id FROM documents d
+            JOIN repositories r ON d.repository_id = r.id
+            WHERE d.id = ? AND r.user_id = ?
+            """, (doc_id, current_user["user_id"]))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Documento no encontrado o sin permisos")
+
     doc_dir = get_doc_images_dir(doc_id)
     ext = Path(image.filename).suffix.lower()
     if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif"]:

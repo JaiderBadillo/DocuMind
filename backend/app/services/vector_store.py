@@ -127,10 +127,12 @@ def search_similar_chunks(
     repository_id: Optional[int] = None, 
     category: Optional[str] = None,
     file_extension: Optional[str] = None,
-    top_k: int = 5
+    top_k: int = 5,
+    user_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Discriminative semantic & keyword retrieval with accent normalization and full fallback.
+    Strictly scoped to user_id when provided.
     """
     query_vector = compute_sparse_embedding(query)
     info_terms = extract_informative_terms(query)
@@ -139,93 +141,103 @@ def search_similar_chunks(
     candidates = []
     
     with get_db() as conn:
-        # First attempt with repository filter if provided
-        for current_repo in [repository_id, None]:
-            sql = """
-            SELECT c.id, c.document_id, c.chunk_index, c.chunk_text, c.embedding_json,
-                   d.original_filename, d.file_extension, m.category
-            FROM document_chunks c
-            JOIN documents d ON c.document_id = d.id
-            LEFT JOIN document_metadata m ON d.id = m.document_id
-            WHERE d.processing_status = 'COMPLETED'
-            """
-            params = []
-            if current_repo:
-                sql += " AND d.repository_id = ?"
-                params.append(current_repo)
-            if category:
-                sql += " AND m.category = ?"
-                params.append(category)
-            if file_extension:
-                sql += " AND LOWER(d.file_extension) = ?"
-                params.append(file_extension.lower())
-                
-            cursor = conn.cursor()
-            cursor.execute(sql, tuple(params))
-            rows = cursor.fetchall()
+        sql = """
+        SELECT c.id, c.document_id, c.chunk_index, c.chunk_text, c.embedding_json,
+               d.original_filename, d.file_extension, m.category
+        FROM document_chunks c
+        JOIN documents d ON c.document_id = d.id
+        JOIN repositories r ON d.repository_id = r.id
+        LEFT JOIN document_metadata m ON d.id = m.document_id
+        WHERE d.processing_status = 'COMPLETED'
+        """
+        params = []
+        if user_id:
+            sql += " AND r.user_id = ?"
+            params.append(user_id)
+        if repository_id:
+            sql += " AND d.repository_id = ?"
+            params.append(repository_id)
+        if category:
+            sql += " AND m.category = ?"
+            params.append(category)
+        if file_extension:
+            sql += " AND LOWER(d.file_extension) = ?"
+            params.append(file_extension.lower())
             
-            for row in rows:
-                chunk_text = row["chunk_text"]
-                chunk_norm = normalize_text_for_search(chunk_text)
+        cursor = conn.cursor()
+        cursor.execute(sql, tuple(params))
+        rows = cursor.fetchall()
+        
+        for row in rows:
+            chunk_text = row["chunk_text"]
+            chunk_norm = normalize_text_for_search(chunk_text)
+            
+            sim = 0.0
+            if row["embedding_json"]:
+                try:
+                    chunk_vec = json.loads(row["embedding_json"])
+                    sim = cosine_similarity(query_vector, chunk_vec)
+                except Exception:
+                    pass
                 
-                sim = 0.0
-                if row["embedding_json"]:
-                    try:
-                        chunk_vec = json.loads(row["embedding_json"])
-                        sim = cosine_similarity(query_vector, chunk_vec)
-                    except Exception:
-                        pass
-                    
-                term_score = 0.0
-                matched_terms_count = 0
-                for term in info_terms:
-                    norm_t = normalize_text_for_search(term)
-                    if norm_t in chunk_norm:
-                        matched_terms_count += 1
-                        term_score += 2.0
-                        if re.search(rf'\b{norm_t}\s*[:\-]', chunk_norm):
-                            term_score += 3.5
+            term_score = 0.0
+            matched_terms_count = 0
+            for term in info_terms:
+                norm_t = normalize_text_for_search(term)
+                if norm_t in chunk_norm:
+                    matched_terms_count += 1
+                    term_score += 2.0
+                    if re.search(rf'\b{norm_t}\s*[:\-]', chunk_norm):
+                        term_score += 3.5
 
-                if len(info_terms) >= 2 and sum(1 for t in info_terms if normalize_text_for_search(t) in chunk_norm) >= 2:
-                    term_score += 4.0
-                if query_norm and query_norm in chunk_norm:
-                    term_score += 7.0
+            if len(info_terms) >= 2 and sum(1 for t in info_terms if normalize_text_for_search(t) in chunk_norm) >= 2:
+                term_score += 4.0
+            if query_norm and query_norm in chunk_norm:
+                term_score += 7.0
 
-                final_score = (sim * 0.3) + term_score
+            final_score = (sim * 0.3) + term_score
 
-                if final_score > 0.05:
-                    candidates.append({
-                        "document_id": row["document_id"],
-                        "document_name": row["original_filename"],
-                        "file_extension": row["file_extension"],
-                        "category": row["category"] or "General",
-                        "chunk_index": row["chunk_index"],
-                        "relevance_score": round(min(0.99, 0.45 + (final_score * 0.1)), 2),
-                        "excerpt": chunk_text,
-                        "matched_count": matched_terms_count
-                    })
+            if final_score > 0.05:
+                candidates.append({
+                    "document_id": row["document_id"],
+                    "document_name": row["original_filename"],
+                    "file_extension": row["file_extension"],
+                    "category": row["category"] or "General",
+                    "chunk_index": row["chunk_index"],
+                    "relevance_score": round(min(0.99, 0.45 + (final_score * 0.1)), 2),
+                    "excerpt": chunk_text,
+                    "matched_count": matched_terms_count
+                })
 
-            if candidates or current_repo is None:
-                break
-
-    # If still no candidates from chunks, fall back to scanning raw_text from documents table
+    # If still no candidates from chunks, fall back to scanning raw_text from documents table strictly scoped to user
     if not candidates:
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            fb_sql = """
                 SELECT d.id, d.original_filename, d.file_extension, d.raw_text, m.category, m.executive_summary
                 FROM documents d
+                JOIN repositories r ON d.repository_id = r.id
                 LEFT JOIN document_metadata m ON d.id = m.document_id
                 WHERE d.processing_status = 'COMPLETED'
-                ORDER BY d.id DESC LIMIT 10
-            """)
+            """
+            fb_params = []
+            if user_id:
+                fb_sql += " AND r.user_id = ?"
+                fb_params.append(user_id)
+            if repository_id:
+                fb_sql += " AND d.repository_id = ?"
+                fb_params.append(repository_id)
+            if category:
+                fb_sql += " AND m.category = ?"
+                fb_params.append(category)
+            fb_sql += " ORDER BY d.id DESC LIMIT 10"
+            cursor.execute(fb_sql, tuple(fb_params))
             raw_docs = cursor.fetchall()
             for rd in raw_docs:
                 txt = rd["raw_text"] or rd["executive_summary"] or ""
                 txt_norm = normalize_text_for_search(txt)
                 doc_terms_matched = sum(1 for t in info_terms if normalize_text_for_search(t) in txt_norm)
                 if doc_terms_matched > 0 or not info_terms:
-                    # Take first 1200 characters as excerpt
                     candidates.append({
                         "document_id": rd["id"],
                         "document_name": rd["original_filename"],
@@ -288,13 +300,14 @@ def hybrid_search_documents(
     repository_id: Optional[int] = None,
     category: Optional[str] = None,
     file_extension: Optional[str] = None,
-    top_k: int = 20
+    top_k: int = 20,
+    user_id: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Hybrid Search combining:
     1. Lexical and exact keyword matching across full document text and filenames.
     2. Vector & term similarity retrieval from document chunks.
-    Filters by repository, category, and file format.
+    Filters by user_id, repository, category, and file format.
     """
     if not query or not query.strip():
         return []
@@ -308,7 +321,8 @@ def hybrid_search_documents(
         repository_id=repository_id,
         category=category,
         file_extension=file_extension,
-        top_k=top_k * 2
+        top_k=top_k * 2,
+        user_id=user_id
     )
     
     # Map document_id -> highest chunk score and chunk excerpt
@@ -318,7 +332,7 @@ def hybrid_search_documents(
         if doc_id not in chunk_map or c["relevance_score"] > chunk_map[doc_id]["relevance_score"]:
             chunk_map[doc_id] = c
 
-    # 2. Query full documents table to combine lexical matching
+    # 2. Query full documents table to combine lexical matching strictly scoped to user
     doc_results: Dict[int, Dict[str, Any]] = {}
     
     with get_db() as conn:
@@ -326,10 +340,14 @@ def hybrid_search_documents(
         SELECT d.id, d.repository_id, d.original_filename, d.file_extension, d.raw_text,
                m.category, m.executive_summary
         FROM documents d
+        JOIN repositories r ON d.repository_id = r.id
         LEFT JOIN document_metadata m ON d.id = m.document_id
         WHERE d.processing_status = 'COMPLETED'
         """
         params = []
+        if user_id:
+            sql += " AND r.user_id = ?"
+            params.append(user_id)
         if repository_id:
             sql += " AND d.repository_id = ?"
             params.append(repository_id)
@@ -459,9 +477,9 @@ def extract_answer_from_context(query: str, chunks: List[Dict[str, Any]]) -> Opt
         return best_sentence
     return None
 
-def answer_rag_query(query: str, repository_id: Optional[int] = None) -> Dict[str, Any]:
-    """Generates an accurate augmented answer based on top matching chunks."""
-    top_chunks = search_similar_chunks(query, repository_id=repository_id, top_k=4)
+def answer_rag_query(query: str, repository_id: Optional[int] = None, user_id: Optional[int] = None) -> Dict[str, Any]:
+    """Generates an accurate augmented answer based on top matching chunks strictly scoped to user."""
+    top_chunks = search_similar_chunks(query, repository_id=repository_id, top_k=4, user_id=user_id)
     
     if not top_chunks:
         return {
