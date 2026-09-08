@@ -93,7 +93,7 @@ class DocuMindApp {
     if (formLogin) {
       formLogin.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = document.getElementById('login-email').value;
+        const email = (document.getElementById('login-email').value || '').trim().toLowerCase();
         const password = document.getElementById('login-password').value;
         try {
           await api.login(email, password);
@@ -108,9 +108,21 @@ class DocuMindApp {
     if (formRegister) {
       formRegister.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = document.getElementById('reg-name').value;
-        const email = document.getElementById('reg-email').value;
+        const name = (document.getElementById('reg-name').value || '').trim();
+        const email = (document.getElementById('reg-email').value || '').trim().toLowerCase();
         const password = document.getElementById('reg-password').value;
+        if (!name) {
+          showToast('Ingresa tu nombre completo', 'error');
+          return;
+        }
+        if (!email || !email.includes('@')) {
+          showToast('Ingresa un correo electrónico válido', 'error');
+          return;
+        }
+        if (password.length < 6) {
+          showToast('La contraseña debe tener mínimo 6 caracteres', 'error');
+          return;
+        }
         try {
           await api.register(email, name, password);
           showToast('Cuenta creada y autenticada con éxito', 'success');

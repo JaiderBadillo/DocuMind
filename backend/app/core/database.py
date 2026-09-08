@@ -10,9 +10,14 @@ SEED_DB_PATH = BASE_DIR / "documind_seed.db"
 _DB_INITIALIZED = False
 
 def get_db_connection():
-    conn = sqlite3.connect(str(DATABASE_PATH))
+    conn = sqlite3.connect(str(DATABASE_PATH), timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
+    except Exception:
+        pass
     return conn
 
 def init_database():
@@ -32,17 +37,18 @@ def init_database():
     try:
         cursor = conn.cursor()
         
-        # 1. Users table
+        # 1. Users table (case-insensitive email)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE COLLATE NOCASE NOT NULL,
             full_name TEXT NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'ADMIN',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase ON users(email COLLATE NOCASE)")
         
         # 2. Repositories table
         cursor.execute("""
@@ -168,12 +174,55 @@ def get_db():
         conn.close()
 
 
-def log_audit(action: str, status: str, details: str = "", user_id: Optional[int] = None, document_id: Optional[int] = None):
+def log_audit(action: str, status: str, details: str = "", user_id: Optional[int] = None, document_id: Optional[int] = None, conn: Optional[sqlite3.Connection] = None):
     try:
-        with get_db() as conn:
+        if conn:
             conn.execute(
                 "INSERT INTO audit_logs (user_id, document_id, action, status, details) VALUES (?, ?, ?, ?, ?)",
                 (user_id, document_id, action, status, details)
             )
+        else:
+            with get_db() as c:
+                c.execute(
+                    "INSERT INTO audit_logs (user_id, document_id, action, status, details) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, document_id, action, status, details)
+                )
     except Exception as e:
         print(f"Error logging audit event: {e}")
+
+def sync_user_to_seed_db(user_id: int):
+    """Sync registered user and repositories to SEED_DB_PATH so they survive fresh deployments."""
+    try:
+        if not SEED_DB_PATH.exists() or str(SEED_DB_PATH.resolve()) == str(Path(DATABASE_PATH).resolve()):
+            return
+        with get_db_connection() as src_conn:
+            src_cur = src_conn.cursor()
+            src_cur.execute("SELECT id, email, full_name, password_hash, role, created_at FROM users WHERE id = ?", (user_id,))
+            u = src_cur.fetchone()
+            if not u:
+                return
+            src_cur.execute("SELECT name, description FROM repositories WHERE user_id = ?", (user_id,))
+            repos = src_cur.fetchall()
+
+        seed_conn = sqlite3.connect(str(SEED_DB_PATH), timeout=30.0)
+        try:
+            s_cur = seed_conn.cursor()
+            s_cur.execute("SELECT id FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))", (u["email"],))
+            existing = s_cur.fetchone()
+            if not existing:
+                s_cur.execute(
+                    "INSERT INTO users (id, email, full_name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (u["id"], u["email"], u["full_name"], u["password_hash"], u["role"], u["created_at"])
+                )
+                seed_uid = u["id"]
+                for r in repos:
+                    s_cur.execute(
+                        "INSERT INTO repositories (user_id, name, description) VALUES (?, ?, ?)",
+                        (seed_uid, r["name"], r["description"])
+                    )
+                seed_conn.commit()
+                print(f"[DB Sync] Successfully synced user {u['email']} to seed DB")
+        finally:
+            seed_conn.close()
+    except Exception as e:
+        print(f"[DB Sync] Warning syncing user to seed DB: {e}")

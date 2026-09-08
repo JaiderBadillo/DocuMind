@@ -73,18 +73,21 @@ class ApiClient {
 
   // --- Auth Endpoints ---
   async login(email, password) {
+    const cleanEmail = (email || '').trim().toLowerCase();
     const data = await this.request('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email: cleanEmail, password })
     });
     this.setSession(data.access_token, data.user);
     return data;
   }
 
   async register(email, fullName, password) {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanName = (fullName || '').trim();
     const data = await this.request('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, full_name: fullName, password })
+      body: JSON.stringify({ email: cleanEmail, full_name: cleanName, password })
     });
     this.setSession(data.access_token, data.user);
     return data;
